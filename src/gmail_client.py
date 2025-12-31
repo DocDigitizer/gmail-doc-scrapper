@@ -2,6 +2,7 @@
 
 import imaplib
 import email
+import time
 from email.header import decode_header
 from email.message import Message
 from datetime import datetime
@@ -30,6 +31,8 @@ class GmailClient:
         self.server = server
         self.port = port
         self.connection: Optional[imaplib.IMAP4_SSL] = None
+        self.current_folder: Optional[str] = None
+        self.last_noop_time: float = 0
 
     def connect(self) -> bool:
         """Connect to Gmail via IMAP.
@@ -41,6 +44,7 @@ class GmailClient:
             console.print(f"[cyan]Connecting to {self.server}:{self.port}...[/cyan]")
             self.connection = imaplib.IMAP4_SSL(self.server, self.port)
             self.connection.login(self.email_address, self.password)
+            self.last_noop_time = time.time()
             console.print("[green]Connected successfully to Gmail[/green]")
             return True
         except imaplib.IMAP4.error as e:
@@ -61,6 +65,73 @@ class GmailClient:
             except:
                 pass
 
+    def check_connection(self) -> bool:
+        """Check if IMAP connection is still alive.
+
+        Returns:
+            True if connection is alive, False otherwise
+        """
+        if not self.connection:
+            return False
+
+        try:
+            # NOOP is a harmless command to check connection
+            status, _ = self.connection.noop()
+            return status == "OK"
+        except:
+            return False
+
+    def keepalive(self, force: bool = False):
+        """Send NOOP command to keep connection alive.
+
+        Gmail IMAP connections timeout after ~30 minutes of inactivity.
+        This sends a NOOP every 5 minutes to keep the connection alive.
+
+        Args:
+            force: Force sending NOOP even if within interval
+        """
+        current_time = time.time()
+
+        # Send NOOP every 5 minutes (300 seconds) or if forced
+        if force or (current_time - self.last_noop_time) >= 300:
+            if self.connection:
+                try:
+                    self.connection.noop()
+                    self.last_noop_time = current_time
+                except Exception as e:
+                    console.print(f"[yellow]Keepalive failed: {e}[/yellow]")
+
+    def reconnect(self) -> bool:
+        """Reconnect to Gmail and reselect current folder.
+
+        Returns:
+            True if reconnection successful, False otherwise
+        """
+        console.print("[yellow]Connection lost, attempting to reconnect...[/yellow]")
+
+        # Store current folder
+        folder_to_restore = self.current_folder
+
+        # Disconnect if still connected
+        try:
+            if self.connection:
+                self.connection.logout()
+        except:
+            pass
+
+        # Reconnect
+        if not self.connect():
+            return False
+
+        # Restore folder selection
+        if folder_to_restore:
+            if not self.select_folder(folder_to_restore):
+                console.print(f"[yellow]Could not restore folder '{folder_to_restore}'[/yellow]")
+                return False
+
+        console.print("[green]Reconnected successfully[/green]")
+        return True
+
     def select_folder(self, folder: str = "INBOX") -> bool:
         """Select an IMAP folder.
 
@@ -78,6 +149,7 @@ class GmailClient:
             status, messages = self.connection.select(folder)
             if status == "OK":
                 num_messages = int(messages[0])
+                self.current_folder = folder  # Save current folder for reconnect
                 console.print(f"[cyan]Selected folder '{folder}' ({num_messages} messages)[/cyan]")
                 return True
             return False
@@ -143,6 +215,15 @@ class GmailClient:
         """
         if not self.connection:
             return None
+
+        # Keep connection alive (sends NOOP every 5 minutes)
+        self.keepalive()
+
+        # Check if connection is still alive, reconnect if needed
+        if not self.check_connection():
+            if not self.reconnect():
+                console.print("[red]Failed to reconnect to Gmail[/red]")
+                return None
 
         try:
             status, msg_data = self.connection.fetch(email_id, "(RFC822)")
