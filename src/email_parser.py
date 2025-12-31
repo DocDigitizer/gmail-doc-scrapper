@@ -203,7 +203,7 @@ class EmailParser:
                     content_type = part.get_content_type()
                     attachment = EmailAttachment(filename, content, content_type)
                     attachments.append(attachment)
-                    console.print(f"[green]✓ Extracted: {filename} ({attachment.size} bytes)[/green]")
+                    console.print(f"[green]Extracted: {filename} ({attachment.size} bytes)[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to extract {filename}: {e}[/red]")
 

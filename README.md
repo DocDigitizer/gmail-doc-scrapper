@@ -151,14 +151,16 @@ output:
 Define custom document types and classification rules:
 
 ```yaml
-faturas:
-  display_name: "Faturas"
+invoices:
+  display_name: "Invoices"
   keywords:
-    - fatura
     - invoice
+    - bill
+    - fatura
     - NIF
-    - total a pagar
+    - total to pay
   patterns:
+    - "Invoice\\s+#?\\d+"
     - "Fatura\\s+N[ºo.:]?\\s*\\d+"
     - "NIF\\s*:?\\s*\\d{9}"
   entities:
@@ -169,6 +171,22 @@ faturas:
 ```
 
 ## Usage
+
+### Interactive Mode (Recommended for First-Time Users)
+
+Run in interactive mode with step-by-step prompts:
+```bash
+python main.py --interactive
+# or using short flag
+python main.py -i
+```
+
+This will guide you through:
+- Gmail credentials (email and app password)
+- Date range selection
+- Document type filtering
+- Output configuration
+- And more...
 
 ### Basic Usage
 
@@ -186,13 +204,19 @@ python main.py --start-date 2024-01-01 --end-date 2024-12-31
 ### Extract Only Specific Document Types
 
 ```bash
-python main.py --start-date 2024-01-01 --document-types faturas,contratos
+python main.py --start-date 2024-01-01 --document-types invoices,contracts
 ```
 
 ### Search in Specific Folder
 
 ```bash
 python main.py --start-date 2024-01-01 --folder "Work/Invoices"
+```
+
+### Custom Output Directory
+
+```bash
+python main.py --start-date 2024-12-01 --output-dir /path/to/output
 ```
 
 ### Dry Run (Test Without Saving)
@@ -205,11 +229,13 @@ python main.py --start-date 2024-12-01 --dry-run
 
 ```
 Options:
+  -i, --interactive           Run in interactive mode with prompts
   --start-date YYYY-MM-DD     Start date for email search
   --end-date YYYY-MM-DD       End date for email search
   --document-types TEXT       Comma-separated list of document types
   --folder TEXT               Gmail folder to search (default: INBOX)
   --config-dir PATH           Configuration directory path
+  --output-dir PATH           Output directory for extracted documents
   --dry-run                   Run without saving files (for testing)
   --help                      Show this message and exit
 ```
@@ -225,11 +251,14 @@ docker-compose build
 ### Run with Docker Compose
 
 ```bash
+# Run in interactive mode (easiest)
+docker-compose run --rm gmail-scraper --interactive
+
 # Extract documents from date range
 docker-compose run --rm gmail-scraper --start-date 2024-01-01 --end-date 2024-12-31
 
 # Extract only invoices
-docker-compose run --rm gmail-scraper --start-date 2024-01-01 --document-types faturas
+docker-compose run --rm gmail-scraper --start-date 2024-01-01 --document-types invoices
 
 # Dry run
 docker-compose run --rm gmail-scraper --start-date 2024-12-01 --dry-run
@@ -249,10 +278,10 @@ docker-compose run --rm gmail-scraper bash
 
 Out of the box, the system recognizes:
 
-- **faturas**: Invoices (PT/EN)
-- **contratos**: Contracts
-- **recibos**: Receipts
-- **documentos_fiscais**: Tax documents
+- **invoices**: Invoices (PT/EN)
+- **contracts**: Contracts and agreements
+- **receipts**: Receipts and payment confirmations
+- **tax_documents**: Tax documents and fiscal declarations
 
 You can add more document types by editing `config/rules.yaml`.
 
@@ -262,13 +291,13 @@ By default, documents are organized as:
 
 ```
 output/
-├── faturas/
+├── invoices/
 │   ├── 2024-12/
 │   │   ├── invoice_001.pdf
 │   │   └── invoice_002.pdf
 │   └── 2025-01/
 │       └── invoice_003.pdf
-├── contratos/
+├── contracts/
 │   └── 2024-11/
 │       └── contract_xyz.pdf
 └── metadata.json

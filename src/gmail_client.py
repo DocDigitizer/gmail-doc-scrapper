@@ -40,14 +40,14 @@ class GmailClient:
             console.print(f"[cyan]Connecting to {self.server}:{self.port}...[/cyan]")
             self.connection = imaplib.IMAP4_SSL(self.server, self.port)
             self.connection.login(self.email_address, self.password)
-            console.print("[green]✓ Connected successfully to Gmail[/green]")
+            console.print("[green]Connected successfully to Gmail[/green]")
             return True
         except imaplib.IMAP4.error as e:
-            console.print(f"[red]✗ IMAP authentication failed: {e}[/red]")
+            console.print(f"[red]IMAP authentication failed: {e}[/red]")
             console.print("[yellow]Make sure you're using an App Password, not your regular password[/yellow]")
             return False
         except Exception as e:
-            console.print(f"[red]✗ Connection failed: {e}[/red]")
+            console.print(f"[red]Connection failed: {e}[/red]")
             return False
 
     def disconnect(self):

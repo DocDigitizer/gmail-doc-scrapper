@@ -157,11 +157,11 @@ class ReportGenerator:
         # Success message
         if self.stats["documents_saved"] > 0:
             console.print(
-                f"[green bold]✓ Successfully extracted {self.stats['documents_saved']} documents![/green bold]"
+                f"[green bold]Successfully extracted {self.stats['documents_saved']} documents![/green bold]"
             )
             console.print(f"[cyan]Output directory: {self.config['output']['base_dir']}[/cyan]")
         else:
-            console.print("[yellow]⚠ No documents were extracted[/yellow]")
+            console.print("[yellow]WARNING: No documents were extracted[/yellow]")
 
     def save_json_report(self) -> str:
         """Save report to JSON file.

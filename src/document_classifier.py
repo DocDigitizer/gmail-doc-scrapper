@@ -53,9 +53,9 @@ class DocumentClassifier:
             model_name = "pt_core_news_lg"
             console.print(f"[cyan]Loading spaCy model: {model_name}...[/cyan]")
             self.nlp = spacy.load(model_name)
-            console.print("[green]✓ spaCy model loaded successfully[/green]")
+            console.print("[green]spaCy model loaded successfully[/green]")
         except Exception as e:
-            console.print(f"[yellow]⚠ spaCy model not available: {e}[/yellow]")
+            console.print(f"[yellow]WARNING: spaCy model not available: {e}[/yellow]")
             console.print("[yellow]Run: python -m spacy download pt_core_news_lg[/yellow]")
             console.print("[yellow]Falling back to pattern/keyword matching[/yellow]")
 
@@ -78,7 +78,7 @@ class DocumentClassifier:
 
             console.print("[cyan]ML model initialized for document classification[/cyan]")
         except ImportError:
-            console.print("[yellow]⚠ scikit-learn not available, using rule-based classification[/yellow]")
+            console.print("[yellow]WARNING: scikit-learn not available, using rule-based classification[/yellow]")
 
     def _get_stop_words(self) -> List[str]:
         """Get Portuguese stop words.
@@ -106,7 +106,7 @@ class DocumentClassifier:
             text_content = self.extract_text(file_path)
 
         if not text_content or len(text_content) < self.min_text_length:
-            console.print(f"[yellow]⚠ Insufficient text content for classification[/yellow]")
+            console.print(f"[yellow]WARNING: Insufficient text content for classification[/yellow]")
             return None
 
         # Try multiple classification methods
@@ -138,13 +138,13 @@ class DocumentClassifier:
 
         if best_result.confidence >= self.confidence_threshold:
             console.print(
-                f"[green]✓ Classified as '{best_result.display_name}' "
+                f"[green]Classified as '{best_result.display_name}' "
                 f"(confidence: {best_result.confidence:.2%}, method: {best_result.method})[/green]"
             )
             return best_result
         else:
             console.print(
-                f"[yellow]⚠ Low confidence classification: {best_result.confidence:.2%} "
+                f"[yellow]WARNING: Low confidence classification: {best_result.confidence:.2%} "
                 f"(threshold: {self.confidence_threshold:.2%})[/yellow]"
             )
             return None
@@ -356,7 +356,7 @@ class DocumentClassifier:
                         text += page_text + "\n"
 
             if text.strip():
-                console.print(f"[green]✓ Extracted text from PDF using pdfplumber[/green]")
+                console.print(f"[green]Extracted text from PDF using pdfplumber[/green]")
                 return text
         except Exception as e:
             console.print(f"[yellow]pdfplumber failed: {e}[/yellow]")
@@ -369,7 +369,7 @@ class DocumentClassifier:
                     text += page.extract_text() + "\n"
 
             if text.strip():
-                console.print(f"[green]✓ Extracted text from PDF using PyPDF2[/green]")
+                console.print(f"[green]Extracted text from PDF using PyPDF2[/green]")
                 return text
         except Exception as e:
             console.print(f"[yellow]PyPDF2 failed: {e}[/yellow]")
@@ -394,7 +394,7 @@ class DocumentClassifier:
             from docx import Document
             doc = Document(file_path)
             text = "\n".join([para.text for para in doc.paragraphs])
-            console.print(f"[green]✓ Extracted text from DOCX[/green]")
+            console.print(f"[green]Extracted text from DOCX[/green]")
             return text
         except Exception as e:
             console.print(f"[red]DOCX extraction failed: {e}[/red]")
@@ -426,11 +426,11 @@ class DocumentClassifier:
                 text += page_text + "\n"
 
             if text.strip():
-                console.print(f"[green]✓ OCR completed successfully[/green]")
+                console.print(f"[green]OCR completed successfully[/green]")
 
             return text
         except ImportError:
-            console.print("[yellow]⚠ OCR dependencies not installed (pytesseract, pdf2image)[/yellow]")
+            console.print("[yellow]WARNING: OCR dependencies not installed (pytesseract, pdf2image)[/yellow]")
             return ""
         except Exception as e:
             console.print(f"[red]OCR failed: {e}[/red]")

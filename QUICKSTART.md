@@ -37,11 +37,14 @@ GMAIL_APP_PASSWORD=your-app-password-here
 # Build Docker image
 docker-compose build
 
+# Run in interactive mode (easiest way)
+docker-compose run --rm gmail-scraper --interactive
+
 # Extract documents from last 30 days
 docker-compose run --rm gmail-scraper --start-date 2024-12-01
 
 # Extract only invoices
-docker-compose run --rm gmail-scraper --start-date 2024-01-01 --document-types faturas
+docker-compose run --rm gmail-scraper --start-date 2024-01-01 --document-types invoices
 ```
 
 ### 4. Check Results
@@ -82,12 +85,23 @@ cp .env.example .env
 ### 4. Run
 
 ```bash
+# Interactive mode (recommended for first-time users)
+python main.py --interactive
+
+# Or with command-line arguments
 python main.py --start-date 2024-12-01
 ```
 
 ---
 
 ## Common Use Cases
+
+### Interactive mode (easiest)
+```bash
+python main.py --interactive
+# or
+python main.py -i
+```
 
 ### Extract all documents from 2024
 ```bash
@@ -96,7 +110,7 @@ python main.py --start-date 2024-01-01 --end-date 2024-12-31
 
 ### Extract only invoices and contracts
 ```bash
-python main.py --start-date 2024-01-01 --document-types faturas,contratos
+python main.py --start-date 2024-01-01 --document-types invoices,contracts
 ```
 
 ### Test without saving (dry run)

@@ -103,7 +103,7 @@ class FileManager:
         """Generate output path for a document.
 
         Args:
-            document_type: Type of document (e.g., 'faturas')
+            document_type: Type of document (e.g., 'invoices')
             original_filename: Original file name
             email_date: Date from email (optional)
 
@@ -114,7 +114,7 @@ class FileManager:
         filename = self._sanitize_filename(original_filename)
 
         if self.structure == "type_and_date":
-            # output/faturas/2025-01/document.pdf
+            # output/invoices/2025-01/document.pdf
             if email_date:
                 year_month = email_date.strftime("%Y-%m")
             else:
@@ -180,7 +180,7 @@ class FileManager:
         # Check for duplicates
         if self.is_duplicate(file_hash):
             existing_path = self.file_hashes[file_hash]
-            console.print(f"[yellow]⊗ Duplicate detected: {original_filename}[/yellow]")
+            console.print(f"[yellow]Duplicate detected: {original_filename}[/yellow]")
             console.print(f"[yellow]  Existing file: {existing_path}[/yellow]")
             return None
 
@@ -222,7 +222,7 @@ class FileManager:
             # Save metadata
             self._save_metadata()
 
-            console.print(f"[green]✓ Saved: {output_path.relative_to(self.output_dir)}[/green]")
+            console.print(f"[green]Saved: {output_path.relative_to(self.output_dir)}[/green]")
             return str(output_path)
 
         except Exception as e:
