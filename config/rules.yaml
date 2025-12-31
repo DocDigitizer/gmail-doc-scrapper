@@ -1,0 +1,108 @@
+# Document Classification Rules
+
+# Each document type has:
+# - keywords: Helper keywords (used if ML confidence is low)
+# - entities: Named entity patterns to look for
+# - patterns: Regex patterns for identification
+# - file_extensions: Preferred file types
+
+faturas:
+  display_name: "Faturas"
+  keywords:
+    - fatura
+    - invoice
+    - recibo
+    - nota fiscal
+    - NIF
+    - NIPC
+    - "total a pagar"
+    - "valor total"
+    - IVA
+    - impostos
+  entities:
+    - MONEY
+    - ORG
+    - DATE
+  patterns:
+    - "Fatura\\s+N[ºo.:]?\\s*\\d+"
+    - "Invoice\\s+#?\\d+"
+    - "NIF\\s*:?\\s*\\d{9}"
+    - "Total\\s*:?\\s*€?\\s*\\d+[.,]\\d{2}"
+  file_extensions:
+    - .pdf
+    - .xml
+  confidence_boost: 0.1  # Boost confidence if patterns match
+
+contratos:
+  display_name: "Contratos"
+  keywords:
+    - contrato
+    - acordo
+    - outorga
+    - "cláusula"
+    - "partes contratantes"
+    - "primeiro outorgante"
+    - "segundo outorgante"
+    - assinatura
+    - "objeto do contrato"
+  entities:
+    - PERSON
+    - ORG
+    - DATE
+    - LOC
+  patterns:
+    - "Contrato\\s+de\\s+\\w+"
+    - "Cláusula\\s+\\d+"
+    - "outorgante[s]?"
+    - "Identificação\\s+das\\s+Partes"
+  file_extensions:
+    - .pdf
+    - .docx
+  confidence_boost: 0.15
+
+recibos:
+  display_name: "Recibos"
+  keywords:
+    - recibo
+    - receipt
+    - comprovante
+    - pagamento
+    - "comprovativo de pagamento"
+  entities:
+    - MONEY
+    - DATE
+    - ORG
+  patterns:
+    - "Recibo\\s+N[ºo.:]?\\s*\\d+"
+    - "Receipt\\s+#?\\d+"
+    - "Valor\\s+Pago"
+  file_extensions:
+    - .pdf
+  confidence_boost: 0.1
+
+documentos_fiscais:
+  display_name: "Documentos Fiscais"
+  keywords:
+    - IRS
+    - IRC
+    - "declaração de impostos"
+    - "nota de liquidação"
+    - "autoridade tributária"
+    - "finanças"
+    - contribuinte
+  entities:
+    - MONEY
+    - DATE
+    - ORG
+  patterns:
+    - "N[ºo.]?\\s*de\\s+Contribuinte"
+    - "AT\\s*-\\s*Autoridade"
+    - "Declaração\\s+Modelo\\s+\\d+"
+  file_extensions:
+    - .pdf
+  confidence_boost: 0.12
+
+# Add more document types as needed
+# propostas:
+# orcamentos:
+# relatorios:

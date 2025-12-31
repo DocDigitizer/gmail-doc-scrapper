@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  gmail-scraper:
+    build: .
+    container_name: gmail-doc-scraper
+    volumes:
+      # Mount output directory to persist extracted documents
+      - ./output:/app/output
+      # Mount reports directory
+      - ./reports:/app/reports
+      # Mount logs directory
+      - ./logs:/app/logs
+      # Mount config for easy editing
+      - ./config:/app/config:ro
+      # Mount .env file for credentials
+      - ./.env:/app/.env:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Override default command here
+    # Example: command: ["--start-date", "2024-01-01", "--end-date", "2024-12-31"]
+    stdin_open: true
+    tty: true
+
+# Usage examples:
+#
+# 1. Build the image:
+#    docker-compose build
+#
+# 2. Run with custom parameters:
+#    docker-compose run --rm gmail-scraper --start-date 2024-01-01 --end-date 2024-12-31
+#
+# 3. Extract only invoices:
+#    docker-compose run --rm gmail-scraper --start-date 2024-01-01 --document-types faturas
+#
+# 4. Dry run:
+#    docker-compose run --rm gmail-scraper --start-date 2024-12-01 --dry-run
+#
+# 5. Run interactive shell:
+#    docker-compose run --rm gmail-scraper bash

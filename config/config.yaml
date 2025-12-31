@@ -1,0 +1,60 @@
+# Gmail Document Scraper Configuration
+
+# IMAP Settings
+imap:
+  server: imap.gmail.com
+  port: 993
+  use_ssl: true
+  timeout: 30
+  folders:
+    - INBOX
+    # - "[Gmail]/Sent Mail"
+    # - "Work/Invoices"
+
+# Document Processing
+processing:
+  enable_ocr: true
+  ocr_languages: ["por", "eng"]  # Portuguese and English
+  max_file_size_mb: 50
+  supported_extensions:
+    - .pdf
+    - .docx
+    - .xlsx
+    - .png
+    - .jpg
+    - .jpeg
+
+# Classification
+classification:
+  confidence_threshold: 0.7
+  min_text_length: 100  # Minimum characters to attempt classification
+  use_ml_model: true
+  fallback_to_keywords: true
+
+# Output Organization
+output:
+  base_dir: ./output
+  structure: "type_and_date"  # type_and_date, date_only, or flat
+  filename_pattern: "{original_name}_{date}"
+  create_metadata: true
+  metadata_file: metadata.json
+
+# Duplicate Detection
+duplicates:
+  method: "hash"  # hash, filename, or both
+  action: "skip"  # skip, rename, or overwrite
+  hash_algorithm: "sha256"
+
+# Reporting
+reporting:
+  enabled: true
+  output_format: "both"  # console, file, or both
+  report_dir: ./reports
+  detailed_log: true
+  log_level: INFO
+
+# Performance
+performance:
+  batch_size: 50  # Number of emails to process per batch
+  max_workers: 4  # Parallel processing threads
+  cache_enabled: true
