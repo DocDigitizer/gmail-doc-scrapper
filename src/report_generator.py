@@ -30,6 +30,7 @@ class ReportGenerator:
             "start_time": datetime.now(),
             "end_time": None,
             "emails_processed": 0,
+            "emails_skipped": 0,
             "emails_with_attachments": 0,
             "attachments_found": 0,
             "documents_classified": 0,
@@ -76,6 +77,10 @@ class ReportGenerator:
         """Record classification failure."""
         self.stats["classification_failures"] += 1
 
+    def record_skipped_email(self):
+        """Record email that was skipped (couldn't be fetched)."""
+        self.stats["emails_skipped"] += 1
+
     def record_error(self, error: str):
         """Record an error.
 
@@ -114,6 +119,8 @@ class ReportGenerator:
         email_table.add_column("Count", justify="right", style="green")
 
         email_table.add_row("Emails Processed", str(self.stats["emails_processed"]))
+        if self.stats["emails_skipped"] > 0:
+            email_table.add_row("Emails Skipped (inaccessible)", str(self.stats["emails_skipped"]))
         email_table.add_row("Emails with Attachments", str(self.stats["emails_with_attachments"]))
         email_table.add_row("Total Attachments Found", str(self.stats["attachments_found"]))
 

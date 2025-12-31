@@ -150,9 +150,25 @@ class GmailClient:
             if status != "OK":
                 return None
 
-            # Parse email
+            # Verify msg_data is valid before accessing
+            if not msg_data or len(msg_data) == 0:
+                return None
+
+            # msg_data is a list of tuples: [(b'1 (RFC822 {size}', b'email content'), b')']
+            # We need the email content which is in msg_data[0][1]
+            if not isinstance(msg_data[0], tuple) or len(msg_data[0]) < 2:
+                return None
+
             email_body = msg_data[0][1]
+            
+            if not email_body:
+                return None
+
+            # Parse email
             return email.message_from_bytes(email_body)
+        except (IndexError, TypeError) as e:
+            # Silently skip emails that can't be fetched (deleted, moved, etc.)
+            return None
         except Exception as e:
             console.print(f"[yellow]Failed to fetch email {email_id}: {e}[/yellow]")
             return None
