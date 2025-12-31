@@ -1,0 +1,40 @@
+site_name: Gmail Document Scraper
+site_description: Automated Gmail document extraction and classification tool
+site_author: Joao Costa Fernandes Group
+repo_url: https://gitlab.com/joaocostafernandes-group/gmail-doc-scrapper
+repo_name: GitLab
+
+theme:
+  name: material
+  palette:
+    primary: blue
+    accent: indigo
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Home: README.md
+  - Quick Start: QUICKSTART.md
+  - Testing:
+      - Test Guide: TEST_GUIDE.md
+      - Testing Instructions: TESTING_INSTRUCTIONS.md
+  - Technical:
+      - Invoice Classification Algorithm: INVOICE_CLASSIFICATION_ALGORITHM.md
+      - Folder Search Examples: FOLDER_SEARCH_EXAMPLES.md
+      - Automatic Folder Search: AUTOMATIC_FOLDER_SEARCH.md
+      - Error Fix Notes: ERROR_FIX_NOTES.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed
+  - toc:
+      permalink: true
