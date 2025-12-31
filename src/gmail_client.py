@@ -3,6 +3,7 @@
 import imaplib
 import email
 from email.header import decode_header
+from email.message import Message
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from rich.console import Console
@@ -131,7 +132,7 @@ class GmailClient:
             console.print(f"[red]Search failed: {e}[/red]")
             return []
 
-    def fetch_email(self, email_id: bytes) -> Optional[email.message.Message]:
+    def fetch_email(self, email_id: bytes) -> Optional[Message]:
         """Fetch a single email by ID.
 
         Args:
@@ -179,7 +180,7 @@ class GmailClient:
 
         return decoded_string
 
-    def get_email_metadata(self, msg: email.message.Message) -> Dict[str, Any]:
+    def get_email_metadata(self, msg: Message) -> Dict[str, Any]:
         """Extract metadata from email message.
 
         Args:
