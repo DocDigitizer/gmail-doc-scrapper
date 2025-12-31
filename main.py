@@ -149,7 +149,7 @@ def interactive_mode(config_dir):
     '--folder',
     type=str,
     default='INBOX',
-    help='Gmail folder to search (default: INBOX)'
+    help='Gmail folder(s) to search. Use "ALL" for all folders, or comma-separated list (default: INBOX)'
 )
 @click.option(
     '--config-dir',
