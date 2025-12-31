@@ -213,6 +213,39 @@ class GmailClient:
         self.connect()
         return self
 
+    def list_folders(self) -> List[str]:
+        """List all available IMAP folders.
+
+        Returns:
+            List of folder names
+        """
+        if not self.connection:
+            console.print("[red]Not connected to Gmail[/red]")
+            return []
+
+        try:
+            status, folders = self.connection.list()
+            if status != "OK":
+                return []
+
+            folder_list = []
+            for folder_data in folders:
+                # Parse folder name from IMAP response
+                # Format: (\HasNoChildren) "/" "FolderName"
+                folder_str = folder_data.decode() if isinstance(folder_data, bytes) else str(folder_data)
+                
+                # Extract folder name (last quoted part)
+                import re
+                match = re.search(r'"([^"]+)"\s*$', folder_str)
+                if match:
+                    folder_name = match.group(1)
+                    folder_list.append(folder_name)
+
+            return folder_list
+        except Exception as e:
+            console.print(f"[yellow]Failed to list folders: {e}[/yellow]")
+            return []
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.disconnect()
