@@ -86,12 +86,9 @@ def interactive_mode(config_dir):
             "[cyan]Enter document type IDs (comma-separated, e.g., invoices,contracts)[/cyan]"
         )
 
-    # Gmail folder
-    console.print("\n[cyan]Gmail Folder Configuration[/cyan]")
-    folder = Prompt.ask(
-        "[cyan]Gmail folder to search[/cyan]",
-        default="INBOX"
-    )
+    # Automatically search all folders
+    folder = "ALL"
+    console.print("\n[cyan]📁 Searching in all Gmail folders automatically[/cyan]")
 
     # Output directory
     console.print("\n[cyan]Output Configuration[/cyan]")
@@ -109,7 +106,7 @@ def interactive_mode(config_dir):
     console.print(f"  Start Date: [green]{start_date.strftime('%Y-%m-%d')}[/green]")
     console.print(f"  End Date: [green]{end_date.strftime('%Y-%m-%d') if end_date else 'Not specified'}[/green]")
     console.print(f"  Document Types: [green]{document_types if document_types else 'All types'}[/green]")
-    console.print(f"  Folder: [green]{folder}[/green]")
+    console.print(f"  Folders: [green]ALL (automatic)[/green]")
     console.print(f"  Output Directory: [green]{output_dir if output_dir else 'Default (./output)'}[/green]")
     console.print(f"  Dry Run: [green]{dry_run}[/green]")
     console.print()
@@ -244,20 +241,53 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
 
         console.print()
 
-        # Select folder
-        if not gmail_client.select_folder(folder):
-            console.print(f"[red]Failed to select folder '{folder}'. Exiting.[/red]")
-            gmail_client.disconnect()
-            sys.exit(1)
+        # Handle folder selection and email search
+        if folder.upper() == "ALL":
+            # Search all folders dynamically
+            console.print("[cyan]Discovering available folders...[/cyan]")
+            all_folders = gmail_client.list_folders()
 
-        console.print()
+            if all_folders:
+                # Exclude spam, trash, and bin folders
+                excluded_patterns = ['[Gmail]/Spam', '[Gmail]/Trash', '[Gmail]/Bin']
+                folders_to_search = [f for f in all_folders if f not in excluded_patterns]
+                console.print(f"[green]Found {len(folders_to_search)} folders to search (excluding spam/trash)[/green]")
+            else:
+                # Fallback to default folders
+                console.print("[yellow]Could not list folders, using default folders[/yellow]")
+                folders_to_search = ['INBOX', '[Gmail]/Sent Mail', '[Gmail]/All Mail']
+                console.print(f"[cyan]Using default folders: {', '.join(folders_to_search)}[/cyan]")
 
-        # Search emails
-        email_ids = gmail_client.search_emails(
-            start_date=start_date,
-            end_date=end_date,
-            has_attachments=True
-        )
+            # Search emails across all folders
+            email_ids = []
+            for folder_name in folders_to_search:
+                try:
+                    if gmail_client.select_folder(folder_name):
+                        folder_email_ids = gmail_client.search_emails(
+                            start_date=start_date,
+                            end_date=end_date,
+                            has_attachments=True
+                        )
+                        email_ids.extend(folder_email_ids)
+                except Exception as e:
+                    console.print(f"[yellow]Skipping folder '{folder_name}': {e}[/yellow]")
+
+            console.print(f"[green]Total emails found across all folders: {len(email_ids)}[/green]")
+        else:
+            # Select single folder
+            if not gmail_client.select_folder(folder):
+                console.print(f"[red]Failed to select folder '{folder}'. Exiting.[/red]")
+                gmail_client.disconnect()
+                sys.exit(1)
+
+            console.print()
+
+            # Search emails
+            email_ids = gmail_client.search_emails(
+                start_date=start_date,
+                end_date=end_date,
+                has_attachments=True
+            )
 
         if not email_ids:
             console.print("[yellow]No emails found matching the specified criteria[/yellow]")
