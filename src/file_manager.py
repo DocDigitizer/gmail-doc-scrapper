@@ -149,14 +149,30 @@ class FileManager:
         Returns:
             Sanitized filename
         """
-        # Replace invalid characters
+        import re
+
+        # Remove line breaks and tabs
+        filename = filename.replace('\r\n', ' ').replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+
+        # Remove multiple spaces
+        filename = re.sub(r'\s+', ' ', filename)
+
+        # Replace invalid Windows characters
         invalid_chars = '<>:"/\\|?*'
         for char in invalid_chars:
             filename = filename.replace(char, '_')
 
+        # Remove leading/trailing spaces and dots
+        filename = filename.strip(' .')
+
         # Limit length
         name = Path(filename).stem[:200]
         ext = Path(filename).suffix
+
+        # Ensure filename is not empty
+        if not name:
+            name = "document"
+
         return f"{name}{ext}"
 
     def save_file(self, content: bytes, document_type: str,

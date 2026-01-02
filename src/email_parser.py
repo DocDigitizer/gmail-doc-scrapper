@@ -190,10 +190,10 @@ class EmailParser:
             # Decode filename
             filename = self._decode_header(filename)
 
-            # Check if extension is supported
+            # Check if extension is supported (skip silently for unsupported types)
             extension = Path(filename).suffix.lower()
             if extension not in self.supported_extensions:
-                console.print(f"[yellow]Skipping unsupported file: {filename}[/yellow]")
+                # Skip silently - don't clutter output with PNG, JPG, etc.
                 continue
 
             # Extract content
@@ -203,7 +203,7 @@ class EmailParser:
                     content_type = part.get_content_type()
                     attachment = EmailAttachment(filename, content, content_type)
                     attachments.append(attachment)
-                    console.print(f"[green]Extracted: {filename} ({attachment.size} bytes)[/green]")
+                    # Silently extract - only show when classified
             except Exception as e:
                 console.print(f"[red]Failed to extract {filename}: {e}[/red]")
 

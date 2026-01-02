@@ -6,6 +6,7 @@ import email.utils
 import tempfile
 import os
 import getpass
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 import click
@@ -22,6 +23,174 @@ from src.file_manager import FileManager
 from src.report_generator import ReportGenerator
 
 console = Console()
+
+# File to store last run configuration
+LAST_RUN_FILE = Path("./reports/.last_run.json")
+
+
+def save_run_config(gmail_email, start_date, end_date, document_types, folder, output_dir, dry_run):
+    """Save run configuration for resume functionality.
+
+    Args:
+        gmail_email: Gmail email address
+        start_date: Start date for email search
+        end_date: End date for email search
+        document_types: Document types filter
+        folder: Gmail folder(s) to search
+        output_dir: Output directory path
+        dry_run: Whether this is a dry run
+    """
+    import json
+
+    config = {
+        'gmail_email': gmail_email,
+        'start_date': start_date.isoformat() if start_date else None,
+        'end_date': end_date.isoformat() if end_date else None,
+        'document_types': document_types,
+        'folder': folder,
+        'output_dir': output_dir,
+        'dry_run': dry_run,
+        'saved_at': datetime.now().isoformat()
+    }
+
+    LAST_RUN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(LAST_RUN_FILE, 'w') as f:
+        json.dump(config, f, indent=2)
+
+
+def load_run_config():
+    """Load last run configuration for resume.
+
+    Returns:
+        Tuple of (gmail_email, start_date, end_date, document_types, folder, output_dir, dry_run)
+        or None if no saved config exists
+    """
+    import json
+
+    if not LAST_RUN_FILE.exists():
+        return None
+
+    try:
+        with open(LAST_RUN_FILE, 'r') as f:
+            config = json.load(f)
+
+        start_date = datetime.fromisoformat(config['start_date']) if config['start_date'] else None
+        end_date = datetime.fromisoformat(config['end_date']) if config['end_date'] else None
+
+        return (
+            config['gmail_email'],
+            start_date,
+            end_date,
+            config['document_types'],
+            config['folder'],
+            config['output_dir'],
+            config['dry_run']
+        )
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not load saved run configuration: {e}[/yellow]")
+        return None
+
+
+def check_dependencies(config):
+    """Check all required and optional dependencies before starting.
+
+    Args:
+        config: ConfigLoader instance with loaded configuration
+
+    Returns:
+        Tuple of (all_ok: bool, warnings: list)
+    """
+    warnings = []
+    critical_errors = []
+
+    console.print("\n[cyan]Checking dependencies...[/cyan]")
+
+    # Check spaCy and Portuguese model
+    try:
+        import spacy
+        try:
+            nlp = spacy.load("pt_core_news_lg")
+            console.print("[green]✓ spaCy and pt_core_news_lg model found[/green]")
+        except OSError:
+            warnings.append("spaCy Portuguese model (pt_core_news_lg) not installed")
+            console.print("[yellow]⚠ spaCy model not found. Install with:[/yellow]")
+            console.print("[yellow]  python -m spacy download pt_core_news_lg[/yellow]")
+            console.print("[yellow]  Classification will use pattern/keyword matching only[/yellow]")
+    except ImportError:
+        warnings.append("spaCy not installed")
+        console.print("[yellow]⚠ spaCy not installed. Install with:[/yellow]")
+        console.print("[yellow]  pip install spacy[/yellow]")
+        console.print("[yellow]  Classification will use pattern/keyword matching only[/yellow]")
+
+    # Check scikit-learn (optional for ML features)
+    if config.get('classification.use_ml_model'):
+        try:
+            import sklearn
+            console.print("[green]✓ scikit-learn found[/green]")
+        except ImportError:
+            warnings.append("scikit-learn not installed (ML features disabled)")
+            console.print("[yellow]⚠ scikit-learn not installed. Install with:[/yellow]")
+            console.print("[yellow]  pip install scikit-learn[/yellow]")
+            console.print("[yellow]  ML-based classification will be disabled[/yellow]")
+
+    # Check OCR dependencies (only if OCR is enabled)
+    if config.get('processing.enable_ocr'):
+        ocr_available = True
+        try:
+            import pytesseract
+            console.print("[green]✓ pytesseract found[/green]")
+        except ImportError:
+            ocr_available = False
+            warnings.append("pytesseract not installed (OCR disabled)")
+            console.print("[yellow]⚠ pytesseract not installed. Install with:[/yellow]")
+            console.print("[yellow]  pip install pytesseract[/yellow]")
+
+        try:
+            import pdf2image
+            console.print("[green]✓ pdf2image found[/green]")
+        except ImportError:
+            ocr_available = False
+            warnings.append("pdf2image not installed (OCR disabled)")
+            console.print("[yellow]⚠ pdf2image not installed. Install with:[/yellow]")
+            console.print("[yellow]  pip install pdf2image[/yellow]")
+
+        if not ocr_available:
+            console.print("[yellow]  OCR for scanned documents will not work[/yellow]")
+
+    # Check core PDF processing libraries
+    try:
+        import PyPDF2
+        console.print("[green]✓ PyPDF2 found[/green]")
+    except ImportError:
+        critical_errors.append("PyPDF2 not installed")
+        console.print("[red]✗ PyPDF2 not installed (REQUIRED). Install with:[/red]")
+        console.print("[red]  pip install PyPDF2[/red]")
+
+    try:
+        import pdfplumber
+        console.print("[green]✓ pdfplumber found[/green]")
+    except ImportError:
+        critical_errors.append("pdfplumber not installed")
+        console.print("[red]✗ pdfplumber not installed (REQUIRED). Install with:[/red]")
+        console.print("[red]  pip install pdfplumber[/red]")
+
+    console.print()
+
+    if critical_errors:
+        console.print("[red]❌ Critical dependencies missing. Please install them before continuing.[/red]\n")
+        return False, warnings
+
+    if warnings:
+        console.print(f"[yellow]⚠ Found {len(warnings)} optional dependency issue(s).[/yellow]")
+        console.print("[yellow]  Application will run with limited functionality.[/yellow]\n")
+
+        proceed = Confirm.ask("[cyan]Continue anyway?[/cyan]", default=True)
+        if not proceed:
+            return False, warnings
+    else:
+        console.print("[green]✓ All dependencies OK[/green]\n")
+
+    return True, warnings
 
 
 def interactive_mode(config_dir):
@@ -96,6 +265,8 @@ def interactive_mode(config_dir):
     output_dir = None
     if use_custom_output:
         output_dir = Prompt.ask("[cyan]Output directory path[/cyan]", default="./output")
+        # Strip quotes if user included them
+        output_dir = output_dir.strip('"').strip("'")
 
     # Dry run
     dry_run = Confirm.ask("\n[cyan]Run in dry-run mode (no files will be saved)?[/cyan]", default=False)
@@ -165,7 +336,12 @@ def interactive_mode(config_dir):
     is_flag=True,
     help='Run without saving files (for testing)'
 )
-def main(interactive, start_date, end_date, document_types, folder, config_dir, output_dir, dry_run):
+@click.option(
+    '--resume',
+    is_flag=True,
+    help='Resume from last run (uses saved configuration and checkpoint)'
+)
+def main(interactive, start_date, end_date, document_types, folder, config_dir, output_dir, dry_run, resume):
     """Gmail Document Scraper - Intelligent document extraction from Gmail.
 
     Extracts and classifies documents (invoices, contracts, etc.) from Gmail
@@ -187,8 +363,52 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
     """
     console.print("[bold cyan]Gmail Document Scraper v1.0[/bold cyan]\n")
 
+    # Handle resume mode
+    if resume:
+        console.print("[cyan]Resume mode activated - loading saved configuration...[/cyan]")
+        saved_config = load_run_config()
+
+        if saved_config:
+            gmail_email, start_date, end_date, document_types, folder, output_dir, dry_run = saved_config
+
+            # Load password from environment
+            gmail_password = os.getenv('GMAIL_APP_PASSWORD')
+            if not gmail_password:
+                console.print("[yellow]Gmail App Password not found in environment[/yellow]")
+                gmail_password = getpass.getpass("Gmail App Password: ")
+
+            # Set environment variables
+            os.environ['GMAIL_EMAIL'] = gmail_email
+            os.environ['GMAIL_APP_PASSWORD'] = gmail_password
+            if output_dir:
+                os.environ['OUTPUT_DIR'] = output_dir
+
+            # Display loaded configuration
+            console.print("[green]✓ Configuration loaded from last run:[/green]")
+            console.print(f"  Email: {gmail_email}")
+            console.print(f"  Start: {start_date.strftime('%Y-%m-%d') if start_date else 'None'}")
+            console.print(f"  End: {end_date.strftime('%Y-%m-%d') if end_date else 'None'}")
+            console.print(f"  Types: {document_types or 'All'}")
+            console.print(f"  Folder: {folder}")
+            console.print()
+
+            # Check for checkpoint
+            checkpoint_file = Path("./reports/.checkpoint.json")
+            if checkpoint_file.exists():
+                import json
+                try:
+                    with open(checkpoint_file, 'r') as f:
+                        checkpoint_data = json.load(f)
+                    console.print(f"[green]✓ Found checkpoint: {len(checkpoint_data.get('processed', []))} emails already processed[/green]\n")
+                except Exception:
+                    pass
+        else:
+            console.print("[red]No saved configuration found. Cannot resume.[/red]")
+            console.print("[yellow]Run with --interactive first, then use --resume for subsequent runs.[/yellow]")
+            sys.exit(1)
+
     # Handle interactive mode
-    if interactive:
+    elif interactive:
         gmail_email, gmail_password, start_date, end_date, document_types, folder, output_dir, dry_run = interactive_mode(config_dir)
         # Temporarily set environment variables for this session
         os.environ['GMAIL_EMAIL'] = gmail_email
@@ -197,7 +417,7 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
             os.environ['OUTPUT_DIR'] = output_dir
 
     # Handle output directory if specified
-    if output_dir and not interactive:
+    if output_dir and not interactive and not resume:
         os.environ['OUTPUT_DIR'] = output_dir
 
     if dry_run:
@@ -207,7 +427,37 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
         # Load configuration
         console.print("[cyan]Loading configuration...[/cyan]")
         config = ConfigLoader(config_dir)
-        console.print("[green]Configuration loaded successfully[/green]\n")
+        console.print("[green]Configuration loaded successfully[/green]")
+
+        # Check dependencies
+        deps_ok, deps_warnings = check_dependencies(config)
+        if not deps_ok:
+            console.print("[red]Cannot continue due to missing dependencies.[/red]")
+            sys.exit(1)
+
+        # Clean output directory before starting (skip if resuming)
+        output_dir_path = Path(config.get('output.base_dir', './output'))
+        checkpoint_file = Path("./reports/.checkpoint.json")
+
+        if not resume:
+            # Only clean if NOT resuming
+            if output_dir_path.exists():
+                console.print(f"[yellow]Cleaning output directory: {output_dir_path}[/yellow]")
+                try:
+                    shutil.rmtree(output_dir_path)
+                    console.print("[green]✓ Output directory cleaned[/green]")
+
+                    # Also clean checkpoint to start fresh
+                    if checkpoint_file.exists():
+                        checkpoint_file.unlink()
+                        console.print("[green]✓ Checkpoint cleaned (starting fresh)[/green]")
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Could not fully clean output directory: {e}[/yellow]")
+        else:
+            console.print("[cyan]Resume mode: Keeping existing output directory and checkpoint[/cyan]")
+
+        output_dir_path.mkdir(parents=True, exist_ok=True)
+        console.print()
 
         # Parse document types filter
         doc_types_filter = None
@@ -239,6 +489,22 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
             console.print("[red]Failed to connect to Gmail. Exiting.[/red]")
             sys.exit(1)
 
+        # Save run configuration for future resume (only in interactive or first run)
+        if interactive or not resume:
+            try:
+                save_run_config(
+                    gmail_email=os.getenv('GMAIL_EMAIL'),
+                    start_date=start_date,
+                    end_date=end_date,
+                    document_types=document_types,
+                    folder=folder,
+                    output_dir=output_dir,
+                    dry_run=dry_run
+                )
+                console.print("[dim]✓ Run configuration saved (use --resume to continue later)[/dim]")
+            except Exception as e:
+                console.print(f"[dim yellow]Warning: Could not save run configuration: {e}[/dim yellow]")
+
         console.print()
 
         # Handle folder selection and email search
@@ -260,6 +526,8 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
 
             # Search emails across all folders
             email_ids = []
+            email_ids_set = set()  # For deduplication
+
             for folder_name in folders_to_search:
                 try:
                     if gmail_client.select_folder(folder_name):
@@ -268,11 +536,17 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
                             end_date=end_date,
                             has_attachments=True
                         )
-                        email_ids.extend(folder_email_ids)
+
+                        # Deduplicate email IDs
+                        new_ids = [eid for eid in folder_email_ids if eid.decode() not in email_ids_set]
+                        email_ids.extend(new_ids)
+                        email_ids_set.update(eid.decode() for eid in new_ids)
+
+                        console.print(f"  [dim]'{folder_name}': {len(folder_email_ids)} emails ({len(new_ids)} unique)[/dim]")
                 except Exception as e:
                     console.print(f"[yellow]Skipping folder '{folder_name}': {e}[/yellow]")
 
-            console.print(f"[green]Total emails found across all folders: {len(email_ids)}[/green]")
+            console.print(f"[green]Total unique emails found across all folders: {len(email_ids)}[/green]")
         else:
             # Select single folder
             if not gmail_client.select_folder(folder):
@@ -296,6 +570,25 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
 
         console.print()
 
+        # Load checkpoint if exists (checkpoint_file defined earlier during cleanup)
+        processed_ids = set()
+        if checkpoint_file.exists():
+            try:
+                import json
+                with open(checkpoint_file, 'r') as f:
+                    checkpoint_data = json.load(f)
+                    processed_ids = set(checkpoint_data.get('processed', []))
+                    console.print(f"[cyan]Found checkpoint: {len(processed_ids)} emails already processed[/cyan]")
+            except Exception:
+                pass
+
+        # Filter out already processed emails
+        remaining_ids = [eid for eid in email_ids if eid.decode() not in processed_ids]
+        if len(remaining_ids) < len(email_ids):
+            console.print(f"[green]Skipping {len(email_ids) - len(remaining_ids)} already processed emails[/green]")
+
+        console.print()
+
         # Process emails
         with Progress(
             SpinnerColumn(),
@@ -307,16 +600,99 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
         ) as progress:
 
             task = progress.add_task(
-                f"[cyan]Processing {len(email_ids)} emails...",
-                total=len(email_ids)
+                f"[cyan]Processing {len(remaining_ids)} emails...",
+                total=len(remaining_ids)
             )
 
-            for email_id in email_ids:
+            email_count = 0
+            failed_fetches = 0  # Track consecutive failed fetches
+
+            for email_id in remaining_ids:
+                email_count += 1
+
+                # Log progress and save checkpoint every 100 emails
+                if email_count % 100 == 0:
+                    console.print(f"\n[cyan]═══ Progress: {email_count}/{len(remaining_ids)} emails processed ═══[/cyan]")
+                    console.print(f"[cyan]Connection status: {'✓ Connected' if gmail_client.connection else '✗ Disconnected'}[/cyan]")
+                    console.print(f"[cyan]Checkpoint size: {len(processed_ids)} emails marked as processed[/cyan]")
+                    console.print(f"[cyan]Failed fetches: {failed_fetches} consecutive[/cyan]")
+
+                    # Save checkpoint
+                    try:
+                        import json
+                        checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
+                        with open(checkpoint_file, 'w') as f:
+                            json.dump({'processed': list(processed_ids), 'total_processed': len(processed_ids)}, f)
+                        console.print(f"[dim]  ✓ Checkpoint saved: {len(processed_ids)} emails[/dim]\n")
+                    except Exception as e:
+                        console.print(f"[yellow]  Warning: Could not save checkpoint: {e}[/yellow]\n")
+
                 try:
-                    # Fetch email
-                    msg = gmail_client.fetch_email(email_id)
+                    # Adaptive delay based on failure rate
+                    import time
+                    base_delay = 0.5  # Increased from 0.3 to 0.5 for more conservative rate
+
+                    # Add progressive backoff if failures detected
+                    if failed_fetches > 0:
+                        backoff_delay = min(failed_fetches * 0.1, 5.0)  # Max 5s backoff
+                        time.sleep(base_delay + backoff_delay)
+                    else:
+                        time.sleep(base_delay)
+
+                    # Fetch email (enable verbose logging after 10 failures to debug)
+                    verbose = (failed_fetches >= 10)
+                    msg = gmail_client.fetch_email(email_id, verbose=verbose)
                     if not msg:
+                        failed_fetches += 1
+
+                        # Progressive intervention based on failure count
+                        if failed_fetches == 20:
+                            console.print(f"\n[yellow]⚠ 20 consecutive failures - adding 5s cooldown[/yellow]")
+                            time.sleep(5)
+                        elif failed_fetches == 50:
+                            console.print(f"\n[yellow]⚠ 50 consecutive failures - trying reconnection[/yellow]")
+                            if gmail_client.reconnect(max_attempts=3):
+                                console.print("[green]✓ Reconnected[/green]\n")
+                                failed_fetches = 0
+                            else:
+                                console.print("[yellow]Reconnection failed, continuing with backoff[/yellow]")
+                        elif failed_fetches == 75:
+                            console.print(f"\n[yellow]⚠ 75 consecutive failures - adding 30s cooldown[/yellow]")
+                            time.sleep(30)
+
+                        # Check if connection is lost - try to recover
+                        if not gmail_client.connection:
+                            console.print(f"\n[yellow]Connection lost (failed fetches: {failed_fetches}), attempting manual reconnection...[/yellow]")
+
+                            # Try to reconnect (10 attempts, ~3 minutes total)
+                            if gmail_client.reconnect(max_attempts=10):
+                                console.print("[green]✓ Reconnected! Continuing...[/green]\n")
+                                # Mark as processed to avoid reprocessing
+                                processed_ids.add(email_id.decode())
+                                failed_fetches = 0  # Reset counter
+                                continue
+                            else:
+                                console.print("\n[red]❌ Unable to reconnect after multiple attempts[/red]")
+                                console.print(f"[yellow]Processed {email_count}/{len(remaining_ids)} emails before permanent disconnect[/yellow]")
+                                console.print(f"[yellow]Failed to fetch {failed_fetches} emails consecutively[/yellow]")
+                                console.print("[yellow]Progress saved via checkpoint - you can resume later[/yellow]")
+                                break
+
+                        # Check if too many consecutive failures (possible Gmail issue)
+                        if failed_fetches >= 100:
+                            console.print(f"\n[red]❌ Too many consecutive fetch failures ({failed_fetches})[/red]")
+                            console.print("[red]This usually means Gmail is rate limiting or there's a connection issue[/red]")
+                            console.print(f"[yellow]Processed {email_count}/{len(remaining_ids)} emails[/yellow]")
+                            console.print("[yellow]Recommendation: Wait 15-30 minutes, then run: python main.py --resume[/yellow]")
+                            console.print("[yellow]Progress saved via checkpoint[/yellow]")
+                            break
+
+                        # Mark as processed even if fetch failed (email deleted, moved, etc.)
+                        processed_ids.add(email_id.decode())
                         continue
+
+                    # Reset failed counter on successful fetch
+                    failed_fetches = 0
 
                     report.record_email_processed()
 
@@ -324,6 +700,8 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
                     email_data = email_parser.parse_email(msg)
 
                     if not email_data['attachments']:
+                        # Mark as processed even without attachments
+                        processed_ids.add(email_id.decode())
                         progress.advance(task)
                         continue
 
@@ -338,6 +716,9 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
                     # Process each attachment
                     for attachment in attachments:
                         try:
+                            console.print(f"\n[cyan]┌─ Processing attachment: {attachment.filename}[/cyan]")
+                            console.print(f"[cyan]│  Size: {attachment.size / 1024:.1f}KB, Type: {attachment.get_extension()}[/cyan]")
+
                             # Extract text from attachment
                             text_content = extract_text_from_bytes(
                                 classifier,
@@ -352,8 +733,11 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
                             )
 
                             if not result:
+                                console.print(f"[yellow]└─ Classification failed for {attachment.filename}[/yellow]\n")
                                 report.record_classification_failure()
                                 continue
+                            else:
+                                console.print(f"[green]└─ Success! Classified as: {result.display_name}[/green]\n")
 
                             # Filter by document type if specified
                             if doc_types_filter and result.document_type not in doc_types_filter:
@@ -392,11 +776,32 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
                             report.record_error(error_msg)
                             console.print(f"[red]{error_msg}[/red]")
 
+                    # Mark email as processed
+                    processed_ids.add(email_id.decode())
+
                 except Exception as e:
                     error_msg = f"Error processing email {email_id}: {e}"
                     report.record_error(error_msg)
+                    # Still mark as processed to avoid reprocessing
+                    processed_ids.add(email_id.decode())
 
                 progress.advance(task)
+
+        # Log why loop ended
+        console.print(f"\n[cyan]Loop ended: Processed {email_count}/{len(remaining_ids)} emails[/cyan]")
+        if email_count >= len(remaining_ids):
+            console.print("[green]✓ All emails processed successfully[/green]")
+        else:
+            console.print(f"[yellow]⚠ Loop ended early - {len(remaining_ids) - email_count} emails not processed[/yellow]")
+
+        # Save final checkpoint
+        try:
+            import json
+            with open(checkpoint_file, 'w') as f:
+                json.dump({'processed': list(processed_ids)}, f)
+            console.print(f"[green]✓ Final checkpoint saved: {len(processed_ids)} emails processed[/green]")
+        except Exception:
+            pass
 
         # Disconnect
         gmail_client.disconnect()
@@ -405,6 +810,29 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
 
         # Generate report
         report.generate_report()
+
+        # Show LLM add-on information
+        console.print("\n")
+        console.print("[cyan]═══════════════════════════════════════════════════════════[/cyan]")
+        console.print("[bold yellow]⚠️  Classification Limitations[/bold yellow]")
+        console.print("[white]This tool uses rule-based classification (~85-90% accuracy)[/white]")
+        console.print("\n[bold cyan]🚀 Need Better Results?[/bold cyan]")
+        console.print("[white]LLM-powered add-on available with:[/white]")
+        console.print("  [green]✓[/green] 95%+ accuracy (GPT-4/Claude)")
+        console.print("  [green]✓[/green] Advanced metadata extraction")
+        console.print("  [green]✓[/green] CSV/Excel export")
+        console.print("  [green]✓[/green] 30+ languages support")
+        console.print("\n[bold]Contact:[/bold] [link=mailto:joao.fernandes@docdigitizer.com]joao.fernandes@docdigitizer.com[/link]")
+        console.print("[cyan]═══════════════════════════════════════════════════════════[/cyan]")
+        console.print()
+
+        # Clean up checkpoint file if all emails were processed
+        if len(processed_ids) >= len(email_ids):
+            try:
+                checkpoint_file.unlink()
+                console.print("[dim]✓ Checkpoint cleaned (all emails processed)[/dim]")
+            except Exception:
+                pass
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Operation cancelled by user[/yellow]")

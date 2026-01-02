@@ -1,137 +1,42 @@
-# Document Classification Rules
-
-# Each document type has:
-# - keywords: Helper keywords (used if ML confidence is low)
-# - entities: Named entity patterns to look for
-# - patterns: Regex patterns for identification
-# - file_extensions: Preferred file types
+# Financial Document Classification Rules
+# ONLY INVOICES - Optimized for invoice detection only
 
 invoices:
   display_name: "Invoices"
   keywords:
+    - fatura
     - invoice
     - bill
-    - fatura
-    - receipt
     - nota fiscal
     - NIF
     - NIPC
-    - "total to pay"
-    - "total amount"
-    - "total a pagar"
-    - "valor total"
-    - VAT
+    - total a pagar
+    - total to pay
+    - valor total
+    - total amount
+    - total due
+    - amount due
     - IVA
-    - tax
-    - impostos
+    - VAT
+    - subtotal
+    - montante
+    - factura
+    - facture
   entities:
     - MONEY
     - ORG
     - DATE
   patterns:
-    - "Invoice\\s+#?\\d+"
     - "Fatura\\s+N[ºo.:]?\\s*\\d+"
+    - "Invoice\\s+#?\\d+"
+    - "Factura\\s+N[ºo.:]?\\s*\\d+"
     - "NIF\\s*:?\\s*\\d{9}"
-    - "Total\\s*:?\\s*[€$]?\\s*\\d+[.,]\\d{2}"
+    - "NIPC\\s*:?\\s*\\d{9}"
+    - "Total\\s*:?\\s*[€$£]?\\s*\\d+[.,]\\d{2}"
+    - "IVA\\s*[(:)]?\\s*\\d+%"
+    - "VAT\\s*[(:)]?\\s*\\d+%"
+    - "Subtotal\\s*:?\\s*[€$£]?\\s*\\d+[.,]\\d{2}"
+    - "Tax\\s+ID\\s*:?\\s*\\d{9}"
   file_extensions:
     - .pdf
-    - .xml
-  confidence_boost: 0.1  # Boost confidence if patterns match
-
-contracts:
-  display_name: "Contracts"
-  keywords:
-    - contract
-    - agreement
-    - contrato
-    - acordo
-    - outorga
-    - clause
-    - "cláusula"
-    - "contracting parties"
-    - "partes contratantes"
-    - "first party"
-    - "second party"
-    - "primeiro outorgante"
-    - "segundo outorgante"
-    - signature
-    - assinatura
-    - "contract object"
-    - "objeto do contrato"
-  entities:
-    - PERSON
-    - ORG
-    - DATE
-    - LOC
-  patterns:
-    - "Contract\\s+\\w+"
-    - "Contrato\\s+de\\s+\\w+"
-    - "Clause\\s+\\d+"
-    - "Cláusula\\s+\\d+"
-    - "party\\s+of\\s+the\\s+\\w+"
-    - "outorgante[s]?"
-    - "Party\\s+Identification"
-    - "Identificação\\s+das\\s+Partes"
-  file_extensions:
-    - .pdf
-    - .docx
   confidence_boost: 0.15
-
-receipts:
-  display_name: "Receipts"
-  keywords:
-    - receipt
-    - recibo
-    - proof
-    - comprovante
-    - payment
-    - pagamento
-    - "proof of payment"
-    - "comprovativo de pagamento"
-  entities:
-    - MONEY
-    - DATE
-    - ORG
-  patterns:
-    - "Receipt\\s+#?\\d+"
-    - "Recibo\\s+N[ºo.:]?\\s*\\d+"
-    - "Amount\\s+Paid"
-    - "Valor\\s+Pago"
-  file_extensions:
-    - .pdf
-  confidence_boost: 0.1
-
-tax_documents:
-  display_name: "Tax Documents"
-  keywords:
-    - tax
-    - IRS
-    - IRC
-    - "tax return"
-    - "declaração de impostos"
-    - "liquidation note"
-    - "nota de liquidação"
-    - "tax authority"
-    - "autoridade tributária"
-    - "finanças"
-    - taxpayer
-    - contribuinte
-  entities:
-    - MONEY
-    - DATE
-    - ORG
-  patterns:
-    - "Tax\\s+ID"
-    - "Taxpayer\\s+Number"
-    - "N[ºo.]?\\s*de\\s+Contribuinte"
-    - "AT\\s*-\\s*Autoridade"
-    - "Tax\\s+Return\\s+\\d+"
-    - "Declaração\\s+Modelo\\s+\\d+"
-  file_extensions:
-    - .pdf
-  confidence_boost: 0.12
-
-# Add more document types as needed
-# proposals:
-# quotes:
-# reports:

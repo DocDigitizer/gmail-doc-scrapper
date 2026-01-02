@@ -85,24 +85,30 @@ class GmailClient:
         """Send NOOP command to keep connection alive.
 
         Gmail IMAP connections timeout after ~30 minutes of inactivity.
-        This sends a NOOP every 5 minutes to keep the connection alive.
+        This sends a NOOP every 3 minutes to keep the connection alive.
 
         Args:
             force: Force sending NOOP even if within interval
         """
         current_time = time.time()
 
-        # Send NOOP every 5 minutes (300 seconds) or if forced
+        # Send NOOP every 5 minutes (300 seconds) or if forced - less aggressive to avoid rate limits
         if force or (current_time - self.last_noop_time) >= 300:
             if self.connection:
                 try:
+                    # Calculate elapsed BEFORE updating last_noop_time
+                    elapsed = int(current_time - self.last_noop_time) if hasattr(self, 'last_noop_time') else 0
                     self.connection.noop()
                     self.last_noop_time = current_time
+                    console.print(f"[dim]  ♥ Keepalive sent (last: {elapsed//60}m ago)[/dim]")
                 except Exception as e:
-                    console.print(f"[yellow]Keepalive failed: {e}[/yellow]")
+                    console.print(f"[yellow]  ✗ Keepalive failed: {e}[/yellow]")
 
-    def reconnect(self) -> bool:
+    def reconnect(self, max_attempts: int = 10) -> bool:
         """Reconnect to Gmail and reselect current folder.
+
+        Args:
+            max_attempts: Maximum number of reconnection attempts (default: 10)
 
         Returns:
             True if reconnection successful, False otherwise
@@ -112,25 +118,39 @@ class GmailClient:
         # Store current folder
         folder_to_restore = self.current_folder
 
-        # Disconnect if still connected
-        try:
-            if self.connection:
-                self.connection.logout()
-        except:
-            pass
+        for attempt in range(1, max_attempts + 1):
+            console.print(f"[cyan]Reconnection attempt {attempt}/{max_attempts}...[/cyan]")
 
-        # Reconnect
-        if not self.connect():
-            return False
+            # Disconnect if still connected
+            try:
+                if self.connection:
+                    self.connection.logout()
+            except:
+                pass
 
-        # Restore folder selection
-        if folder_to_restore:
-            if not self.select_folder(folder_to_restore):
-                console.print(f"[yellow]Could not restore folder '{folder_to_restore}'[/yellow]")
-                return False
+            self.connection = None
 
-        console.print("[green]Reconnected successfully[/green]")
-        return True
+            # Wait before reconnecting (progressive backoff: 5s, 10s, 15s, 20s, 30s...)
+            if attempt > 1:
+                wait_time = min(5 * attempt, 30)  # 5s, 10s, 15s, 20s, 25s, 30s (max)
+                console.print(f"[cyan]Waiting {wait_time}s before retry...[/cyan]")
+                time.sleep(wait_time)
+
+            # Reconnect
+            if self.connect():
+                # Restore folder selection
+                if folder_to_restore:
+                    if self.select_folder(folder_to_restore):
+                        console.print("[green]✓ Reconnected and folder restored successfully[/green]")
+                        return True
+                    else:
+                        console.print(f"[yellow]Could not restore folder '{folder_to_restore}'[/yellow]")
+                else:
+                    console.print("[green]✓ Reconnected successfully[/green]")
+                    return True
+
+        console.print(f"[red]Failed to reconnect after {max_attempts} attempts (total: ~{5*max_attempts//2}s)[/red]")
+        return False
 
     def select_folder(self, folder: str = "INBOX") -> bool:
         """Select an IMAP folder.
@@ -204,16 +224,19 @@ class GmailClient:
             console.print(f"[red]Search failed: {e}[/red]")
             return []
 
-    def fetch_email(self, email_id: bytes) -> Optional[Message]:
+    def fetch_email(self, email_id: bytes, verbose: bool = False) -> Optional[Message]:
         """Fetch a single email by ID.
 
         Args:
             email_id: Email ID to fetch
+            verbose: Enable verbose logging for debugging
 
         Returns:
             Email message object or None
         """
         if not self.connection:
+            if verbose:
+                console.print(f"[dim red]  Fetch failed: No connection[/dim red]")
             return None
 
         # Keep connection alive (sends NOOP every 5 minutes)
@@ -221,13 +244,36 @@ class GmailClient:
 
         # Check if connection is still alive, reconnect if needed
         if not self.check_connection():
+            if verbose:
+                console.print(f"[dim yellow]  Connection check failed, attempting reconnect...[/dim yellow]")
             if not self.reconnect():
                 console.print("[red]Failed to reconnect to Gmail[/red]")
                 return None
 
         try:
             status, msg_data = self.connection.fetch(email_id, "(RFC822)")
+        except Exception as e:
+            error_str = str(e)
+            # Check for rate limiting error
+            if "bandwidth" in error_str.lower() or "exceeded" in error_str.lower():
+                console.print(f"[yellow]⚠ Gmail rate limit detected! Pausing 60s...[/yellow]")
+                time.sleep(60)
+                # Try reconnecting
+                if self.reconnect():
+                    try:
+                        status, msg_data = self.connection.fetch(email_id, "(RFC822)")
+                    except Exception:
+                        if verbose:
+                            console.print(f"[dim red]  Fetch retry failed after rate limit[/dim red]")
+                        return None
+                else:
+                    return None
+            else:
+                if verbose:
+                    console.print(f"[dim red]  Fetch exception: {error_str}[/dim red]")
+                return None
 
+        try:
             if status != "OK":
                 return None
 

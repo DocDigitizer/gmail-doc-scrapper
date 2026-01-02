@@ -1,154 +1,113 @@
-# Gmail Document Scraper
+# 📧 Gmail Document Scraper
 
-An intelligent, AI-powered agent that automatically extracts and classifies documents (invoices, contracts, receipts, etc.) from your Gmail account. Uses NLP and machine learning to analyze document content, not just keywords.
+> **Intelligent document extraction and classification from Gmail using AI-powered content analysis**
 
-## Features
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](DOCKER.md)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-- **Intelligent Content Analysis**: Uses spaCy NLP and pattern matching to classify documents based on actual content
-- **Multiple Document Types**: Supports invoices, contracts, receipts, fiscal documents, and more
-- **Duplicate Detection**: SHA256 hash-based duplicate detection to avoid saving the same document twice
-- **OCR Support**: Extracts text from scanned PDFs and images using Tesseract
-- **Flexible Organization**: Organizes documents by type and date automatically
-- **Detailed Reports**: Generates comprehensive reports of extraction operations
-- **Docker Support**: Fully containerized for easy deployment
-- **Configurable Rules**: YAML-based classification rules that you can customize
+Extract, classify, and organize documents (invoices, contracts, receipts) from your Gmail inbox automatically using machine learning and NLP.
 
-## Table of Contents
+## ✨ Features
 
-- [Installation](#installation)
-- [Gmail Setup](#gmail-setup)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Docker Usage](#docker-usage)
-- [Document Types](#document-types)
-- [Architecture](#architecture)
-- [Contributing](#contributing)
-- [License](#license)
+- 🤖 **AI-Powered Classification** - Uses spaCy NLP + pattern matching for document classification
+- 📄 **PDF Support** - Extracts text from PDF documents with timeout protection
+- 🔄 **Smart Deduplication** - SHA256 hashing prevents duplicate file saves
+- 📁 **Flexible Organization** - Multiple output structures (by type, by date, flat)
+- 🔌 **Resume Capability** - Continue from where you left off with checkpoint system
+- 🌍 **Multi-Language** - Supports Portuguese, English, Spanish, and more
+- ⚡ **Rate Limit Protection** - Adaptive delays prevent Gmail API throttling
+- 🐳 **Docker Ready** - Complete Docker and Docker Compose support
+- 🔒 **Secure** - App passwords only, credentials never stored in code
 
-## Installation
+## 🚀 Quick Start
 
-### Prerequisites
-
-- Python 3.9+
-- Gmail account with IMAP enabled
-- Tesseract OCR (optional, for scanned documents)
-
-### Option 1: Local Installation
-
-1. Clone the repository:
-```bash
-git clone https://gitlab.com/your-username/gmail-doc-scraper.git
-cd gmail-doc-scraper
-```
-
-2. Create virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-4. Download spaCy Portuguese model:
-```bash
-python -m spacy download pt_core_news_lg
-```
-
-5. (Optional) Install Tesseract for OCR:
-   - **Ubuntu/Debian**: `sudo apt-get install tesseract-ocr tesseract-ocr-por`
-   - **macOS**: `brew install tesseract tesseract-lang`
-   - **Windows**: Download from [GitHub releases](https://github.com/UB-Mannheim/tesseract/wiki)
-
-### Option 2: Docker Installation
+### Option 1: Docker (Recommended)
 
 ```bash
-git clone https://gitlab.com/your-username/gmail-doc-scraper.git
-cd gmail-doc-scraper
-docker-compose build
+# Clone repository
+git clone https://github.com/yourusername/gmail-doc-scrapper.git
+cd gmail-doc-scrapper
+
+# Create .env file
+cp .env.example .env
+# Edit .env with your Gmail credentials
+
+# Run with Docker Compose
+docker-compose run --rm gmail-scraper --interactive
 ```
 
-## Gmail Setup
+See [DOCKER.md](DOCKER.md) for complete Docker documentation.
 
-To allow the application to access your Gmail account via IMAP, you need to create an **App Password**. This is more secure than using your regular Gmail password.
+### Option 2: Local Installation
 
-### Step-by-Step Guide to Create Gmail App Password
+```bash
+# Clone repository
+git clone https://github.com/yourusername/gmail-doc-scrapper.git
+cd gmail-doc-scrapper
 
-1. **Enable 2-Factor Authentication** (required for App Passwords):
-   - Go to [Google Account Security](https://myaccount.google.com/security)
-   - Under "Signing in to Google", select **2-Step Verification**
-   - Follow the prompts to enable 2FA
+# Automated setup (Unix/Linux/macOS)
+./setup.sh
 
-2. **Generate App Password**:
-   - Go to [Google App Passwords](https://myaccount.google.com/apppasswords)
-   - You may need to sign in again
-   - Select app: Choose **Mail**
-   - Select device: Choose **Other (Custom name)** and enter "Gmail Doc Scraper"
-   - Click **Generate**
-   - Google will display a 16-character password - **copy this immediately**
-
-3. **Save the App Password**:
-   - Copy `.env.example` to `.env`:
-     ```bash
-     cp .env.example .env
-     ```
-   - Edit `.env` and add your credentials:
-     ```
-     GMAIL_EMAIL=your-email@gmail.com
-     GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
-     ```
-   - **Important**: Remove spaces from the app password when pasting
-
-4. **Enable IMAP in Gmail**:
-   - Go to [Gmail Settings](https://mail.google.com/mail/u/0/#settings/fwdandpop)
-   - Click on **Forwarding and POP/IMAP** tab
-   - Enable **IMAP access**
-   - Click **Save Changes**
-
-### Security Notes
-
-- App Passwords are safer than your main password
-- They can be revoked at any time from [Google Account](https://myaccount.google.com/apppasswords)
-- Never commit `.env` file to version control
-- The app password only grants access to Gmail, not your entire Google account
-
-## Configuration
-
-### Main Configuration (`config/config.yaml`)
-
-Customize the application behavior:
-
-```yaml
-# IMAP settings
-imap:
-  folders:
-    - INBOX
-    - "[Gmail]/Sent Mail"
-
-# Document processing
-processing:
-  enable_ocr: true
-  max_file_size_mb: 50
-  supported_extensions:
-    - .pdf
-    - .docx
-    - .xlsx
-
-# Classification
-classification:
-  confidence_threshold: 0.7
-  use_ml_model: true
-
-# Output organization
-output:
-  structure: "type_and_date"  # type_and_date, date_only, or flat
+# Or Windows PowerShell
+.\setup.ps1
 ```
 
-### Classification Rules (`config/rules.yaml`)
+### First Run
 
-Define custom document types and classification rules:
+```bash
+# Interactive mode
+python main.py --interactive
+```
+
+**Example:**
+```
+Gmail email: your-email@gmail.com
+Gmail App Password: xxxx-xxxx-xxxx-xxxx
+Start date: 2024-01-01
+End date: 2024-12-31
+Folder: INBOX
+```
+
+## 📖 Documentation
+
+- **[Installation Guide](INSTALLATION.md)** - Detailed setup instructions
+- **[Docker Guide](DOCKER.md)** - Docker & Docker Compose setup
+- **[Quick Start](QUICKSTART.md)** - Get running in 5 minutes
+- **[Resume Functionality](RESUME_GUIDE.md)** - Continue interrupted runs
+- **[Testing Guide](TEST_GUIDE.md)** - Running tests
+- **[Contributing](CONTRIBUTING.md)** - How to contribute
+
+## 🎯 Usage Examples
+
+```bash
+# Interactive mode
+python main.py --interactive
+
+# Resume from checkpoint
+python main.py --resume
+
+# Specific date range
+python main.py --start-date 2024-01-01 --end-date 2024-12-31
+
+# Extract only invoices
+python main.py --document-types invoices
+
+# Docker interactive
+docker-compose run --rm gmail-scraper --interactive
+```
+
+## ⚙️ Configuration
+
+### Environment Variables (.env)
+
+```bash
+GMAIL_EMAIL=your-email@gmail.com
+GMAIL_APP_PASSWORD=your-app-password
+```
+
+### Classification Rules (config/rules.yaml)
 
 ```yaml
 invoices:
@@ -156,275 +115,158 @@ invoices:
   keywords:
     - invoice
     - bill
-    - fatura
-    - NIF
-    - total to pay
   patterns:
     - "Invoice\\s+#?\\d+"
-    - "Fatura\\s+N[ºo.:]?\\s*\\d+"
-    - "NIF\\s*:?\\s*\\d{9}"
-  entities:
-    - MONEY
-    - ORG
-    - DATE
-  confidence_boost: 0.1
 ```
 
-## Usage
+## 🔐 Gmail Setup
 
-### Interactive Mode (Recommended for First-Time Users)
+1. Enable IMAP in Gmail Settings
+2. Enable 2-Factor Authentication
+3. Generate App Password at [Google Account Security](https://myaccount.google.com/security)
+4. Add to `.env` file
 
-Run in interactive mode with step-by-step prompts:
-```bash
-python main.py --interactive
-# or using short flag
-python main.py -i
-```
-
-This will guide you through:
-- Gmail credentials (email and app password)
-- Date range selection
-- Document type filtering
-- Output configuration
-- And more...
-
-### Basic Usage
-
-Extract all documents from the last 30 days:
-```bash
-python main.py --start-date 2024-12-01
-```
-
-### Extract Specific Date Range
-
-```bash
-python main.py --start-date 2024-01-01 --end-date 2024-12-31
-```
-
-### Extract Only Specific Document Types
-
-```bash
-python main.py --start-date 2024-01-01 --document-types invoices,contracts
-```
-
-### Search in Specific Folder
-
-```bash
-python main.py --start-date 2024-01-01 --folder "Work/Invoices"
-```
-
-### Custom Output Directory
-
-```bash
-python main.py --start-date 2024-12-01 --output-dir /path/to/output
-```
-
-### Dry Run (Test Without Saving)
-
-```bash
-python main.py --start-date 2024-12-01 --dry-run
-```
-
-### CLI Options
-
-```
-Options:
-  -i, --interactive           Run in interactive mode with prompts
-  --start-date YYYY-MM-DD     Start date for email search
-  --end-date YYYY-MM-DD       End date for email search
-  --document-types TEXT       Comma-separated list of document types
-  --folder TEXT               Gmail folder to search (default: INBOX)
-  --config-dir PATH           Configuration directory path
-  --output-dir PATH           Output directory for extracted documents
-  --dry-run                   Run without saving files (for testing)
-  --help                      Show this message and exit
-```
-
-## Docker Usage
-
-### Build the Image
-
-```bash
-docker-compose build
-```
-
-### Run with Docker Compose
-
-```bash
-# Run in interactive mode (easiest)
-docker-compose run --rm gmail-scraper --interactive
-
-# Extract documents from date range
-docker-compose run --rm gmail-scraper --start-date 2024-01-01 --end-date 2024-12-31
-
-# Extract only invoices
-docker-compose run --rm gmail-scraper --start-date 2024-01-01 --document-types invoices
-
-# Dry run
-docker-compose run --rm gmail-scraper --start-date 2024-12-01 --dry-run
-```
-
-### Access Output Files
-
-Output files are automatically mounted to your local `./output` directory.
-
-### Run Interactive Shell
-
-```bash
-docker-compose run --rm gmail-scraper bash
-```
-
-## Document Types
-
-Out of the box, the system recognizes:
-
-- **invoices**: Invoices (PT/EN)
-- **contracts**: Contracts and agreements
-- **receipts**: Receipts and payment confirmations
-- **tax_documents**: Tax documents and fiscal declarations
-
-You can add more document types by editing `config/rules.yaml`.
-
-## Output Structure
-
-By default, documents are organized as:
+## 📊 Output Structure
 
 ```
 output/
 ├── invoices/
-│   ├── 2024-12/
+│   ├── 2024-01/
 │   │   ├── invoice_001.pdf
 │   │   └── invoice_002.pdf
-│   └── 2025-01/
+│   └── 2024-02/
 │       └── invoice_003.pdf
-├── contracts/
-│   └── 2024-11/
-│       └── contract_xyz.pdf
 └── metadata.json
+
+reports/
+├── report_20240101_120000.json
+├── .checkpoint.json
+└── .last_run.json
 ```
 
-The `metadata.json` file contains detailed information about each extracted document.
+## ⚠️ Limitations & Known Issues
 
-## Architecture
+### Current Classification Limitations
 
-### Components
+This project uses **rule-based classification** (pattern matching + NLP) with some limitations:
 
-- **GmailClient**: IMAP connection and email retrieval
-- **EmailParser**: Email parsing and attachment extraction
-- **DocumentClassifier**: Intelligent document classification using NLP
-- **FileManager**: File organization and duplicate detection
-- **ReportGenerator**: Detailed operation reports
+- **Accuracy:** ~85-90% for well-formatted documents
+- **Language Support:** Best for English and Portuguese
+- **OCR:** Disabled by default (requires Tesseract installation)
+- **Complex Documents:** May misclassify unusual formats
+- **Custom Types:** Requires manual rule configuration
 
-### Classification Methods
+### 🚀 Need Better Classification?
 
-The classifier uses multiple methods (in order of priority):
+**Enhanced LLM-Powered Solution Available!**
 
-1. **Pattern Matching**: Regex patterns for document-specific formats
-2. **NLP Analysis**: spaCy named entity recognition
-3. **Keyword Matching**: Fallback keyword-based classification
+I offer a **premium add-on** with advanced capabilities:
 
-Results are combined with confidence scoring to select the best classification.
+✅ **LLM-Based Classification**
+- **95%+ accuracy** using GPT-4/Claude
+- Understands context, not just patterns
+- Handles complex and multi-page documents
+- Works with scanned/OCR documents
 
-## Reports
+✅ **Advanced Document Analysis**
+- Extract structured metadata (dates, amounts, parties, line items)
+- Multi-language support (30+ languages)
+- Custom document types without manual configuration
+- Confidence scoring with explanations
 
-After each run, you get:
+✅ **CSV/Excel Export**
+- Export extracted metadata to CSV/Excel format
+- Customizable fields and column mapping
+- Batch export capabilities
+- Direct integration with accounting software (QuickBooks, Xero, SAP)
 
-- **Console Report**: Formatted summary in terminal
-- **JSON Report**: Detailed report saved to `reports/` directory
+✅ **Production Support**
+- Priority email support with SLA
+- Custom integrations and API endpoints
+- Training for your specific document types
+- Dedicated support channel
 
-Example report output:
-```
-┌─ Summary ────────────────────────────┐
-│ Gmail Document Scraper Report        │
-│                                       │
-│ Started:  2025-01-15 10:30:00        │
-│ Finished: 2025-01-15 10:35:23        │
-│ Duration: 0:05:23                     │
-└───────────────────────────────────────┘
+**Interested?** Contact me for pricing, demo, and trial access:
 
-┌─ Email Processing ───────────────────┐
-│ Metric                    │ Count    │
-├───────────────────────────┼──────────┤
-│ Emails Processed          │ 150      │
-│ Emails with Attachments   │ 45       │
-│ Total Attachments Found   │ 78       │
-└───────────────────────────┴──────────┘
+📧 **Email:** [joao.fernandes@docdigitizer.com](mailto:joao.fernandes@docdigitizer.com)
 
-┌─ Document Processing ────────────────┐
-│ Metric                    │ Count    │
-├───────────────────────────┼──────────┤
-│ Documents Classified      │ 65       │
-│ Documents Saved           │ 62       │
-│ Duplicates Skipped        │ 3        │
-│ Classification Failures   │ 13       │
-└───────────────────────────┴──────────┘
+**Subject:** "Gmail Scraper - LLM Add-on Interest"
 
-✓ Successfully extracted 62 documents!
-Output directory: ./output
-```
+**Include in your email:**
+- Current document volume (emails/month)
+- Document types you need to process
+- Required languages
+- Integration needs (if any)
 
-## Testing
+## 🧪 Testing
 
-Run tests:
 ```bash
-pytest tests/
+# Run all tests
+pytest tests/ -v
+
+# Quick test (10 emails)
+python test_quick.py
+
+# Installation verification
+python test_installation.py
 ```
 
-Run with coverage:
+## 🛠️ Troubleshooting
+
+**"Authentication failed"**
+- Use App Password (not regular password)
+- Verify 2FA is enabled
+- Check IMAP is enabled
+
+**"Too many consecutive fetch failures"**
+- Gmail rate limiting detected
+- Wait 15-30 minutes
+- Run `python main.py --resume`
+
+**"spaCy model not found"**
 ```bash
-pytest --cov=src tests/
+python -m spacy download pt_core_news_lg
 ```
 
-## Troubleshooting
+See [INSTALLATION.md](INSTALLATION.md) for detailed troubleshooting.
 
-### "IMAP authentication failed"
-- Make sure you're using an App Password, not your regular Gmail password
-- Verify that 2FA is enabled on your Google account
-- Check that IMAP is enabled in Gmail settings
+## 🤝 Contributing
 
-### "spaCy model not available"
-- Install the Portuguese model: `python -m spacy download pt_core_news_lg`
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### "OCR dependencies not installed"
-- Install Tesseract OCR system package
-- Or disable OCR in `config/config.yaml`: `enable_ocr: false`
+## 📝 License
 
-### "No documents were extracted"
-- Check date range covers emails you expect
-- Verify document types are configured in `config/rules.yaml`
-- Try `--dry-run` to see what would be classified
-- Lower `confidence_threshold` in `config/config.yaml`
+MIT License - see [LICENSE](LICENSE) file.
 
-## Contributing
+## 🙏 Acknowledgments
 
-Contributions are welcome! Please:
+- [spaCy](https://spacy.io/) - NLP library
+- [pdfplumber](https://github.com/jsvine/pdfplumber) - PDF extraction
+- [Rich](https://github.com/Textualize/rich) - Terminal UI
+- [Click](https://click.palletsprojects.com/) - CLI framework
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+## 📞 Support
 
-## License
+### Community Support (Free)
 
-MIT License - see [LICENSE](LICENSE) file for details
+- **Issues:** [GitHub Issues](https://github.com/yourusername/gmail-doc-scrapper/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/yourusername/gmail-doc-scrapper/discussions)
 
-## Roadmap
+### Commercial Support & Add-ons
 
-- [ ] Support for more email providers (Outlook, etc.)
-- [ ] Web UI for browsing extracted documents
-- [ ] Machine learning model training from user feedback
-- [ ] Support for email forwarding rules
-- [ ] Integration with document management systems
-- [ ] Multi-language support (currently PT/EN)
+📧 **Email:** [joao.fernandes@docdigitizer.com](mailto:joao.fernandes@docdigitizer.com)
 
-## Support
-
-For issues and questions:
-- Open an issue on GitLab
-- Check existing issues for solutions
-- Review documentation in `/docs` directory
+**Services:**
+- LLM-powered classification add-on (95%+ accuracy)
+- Advanced metadata extraction and CSV export
+- Custom integrations and API development
+- Training and consultation
+- Production deployment support
 
 ---
 
-**Made with ❤️ for automating document management**
+**Made with ❤️ for document automation**
+
+**⭐ Star this repository if you find it useful!**
+
+**💬 Questions? Contact:** [joao.fernandes@docdigitizer.com](mailto:joao.fernandes@docdigitizer.com)

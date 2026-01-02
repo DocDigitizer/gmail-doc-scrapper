@@ -51,13 +51,11 @@ class DocumentClassifier:
         try:
             import spacy
             model_name = "pt_core_news_lg"
-            console.print(f"[cyan]Loading spaCy model: {model_name}...[/cyan]")
             self.nlp = spacy.load(model_name)
-            console.print("[green]spaCy model loaded successfully[/green]")
-        except Exception as e:
-            console.print(f"[yellow]WARNING: spaCy model not available: {e}[/yellow]")
-            console.print("[yellow]Run: python -m spacy download pt_core_news_lg[/yellow]")
-            console.print("[yellow]Falling back to pattern/keyword matching[/yellow]")
+            console.print("[green]✓ spaCy NLP model loaded[/green]")
+        except Exception:
+            # Dependencies checked at startup, silently fall back to pattern/keyword matching
+            pass
 
     def _initialize_ml_model(self):
         """Initialize ML model for text classification."""
@@ -76,9 +74,10 @@ class DocumentClassifier:
                 stop_words=self._get_stop_words()
             )
 
-            console.print("[cyan]ML model initialized for document classification[/cyan]")
+            console.print("[green]✓ ML model initialized[/green]")
         except ImportError:
-            console.print("[yellow]WARNING: scikit-learn not available, using rule-based classification[/yellow]")
+            # Dependencies checked at startup, silently fall back to rule-based classification
+            pass
 
     def _get_stop_words(self) -> List[str]:
         """Get Portuguese stop words.
@@ -106,8 +105,10 @@ class DocumentClassifier:
             text_content = self.extract_text(file_path)
 
         if not text_content or len(text_content) < self.min_text_length:
-            console.print(f"[yellow]WARNING: Insufficient text content for classification[/yellow]")
+            console.print(f"[yellow]  ✗ Insufficient text: {len(text_content) if text_content else 0} chars (min: {self.min_text_length})[/yellow]")
             return None
+
+        console.print(f"[cyan]→ Classifying document ({len(text_content)} chars)[/cyan]")
 
         # Try multiple classification methods
         results = []
@@ -115,21 +116,33 @@ class DocumentClassifier:
         # 1. Pattern-based classification
         pattern_result = self._classify_by_patterns(text_content)
         if pattern_result:
+            console.print(f"[dim]  Pattern: {pattern_result.document_type} ({pattern_result.confidence:.0%})[/dim]")
             results.append(pattern_result)
+        else:
+            console.print(f"[dim]  Pattern: No match[/dim]")
 
         # 2. NLP-based classification
         if self.nlp:
             nlp_result = self._classify_by_nlp(text_content)
             if nlp_result:
+                console.print(f"[dim]  NLP: {nlp_result.document_type} ({nlp_result.confidence:.0%})[/dim]")
                 results.append(nlp_result)
+            else:
+                console.print(f"[dim]  NLP: No match[/dim]")
+        else:
+            console.print(f"[dim]  NLP: Disabled[/dim]")
 
         # 3. Keyword-based classification (fallback)
         keyword_result = self._classify_by_keywords(text_content)
         if keyword_result:
+            console.print(f"[dim]  Keyword: {keyword_result.document_type} ({keyword_result.confidence:.0%})[/dim]")
             results.append(keyword_result)
+        else:
+            console.print(f"[dim]  Keyword: No match[/dim]")
 
         # Select best result
         if not results:
+            console.print(f"[red]  ✗ No classification match found[/red]")
             return None
 
         # Sort by confidence and return best match
@@ -137,16 +150,10 @@ class DocumentClassifier:
         best_result = results[0]
 
         if best_result.confidence >= self.confidence_threshold:
-            console.print(
-                f"[green]Classified as '{best_result.display_name}' "
-                f"(confidence: {best_result.confidence:.2%}, method: {best_result.method})[/green]"
-            )
+            console.print(f"[green]  ✓ {best_result.display_name}: {best_result.confidence:.0%} (threshold: {self.confidence_threshold:.0%})[/green]")
             return best_result
         else:
-            console.print(
-                f"[yellow]WARNING: Low confidence classification: {best_result.confidence:.2%} "
-                f"(threshold: {self.confidence_threshold:.2%})[/yellow]"
-            )
+            console.print(f"[yellow]  ✗ Best match '{best_result.display_name}' below threshold: {best_result.confidence:.0%} < {self.confidence_threshold:.0%}[/yellow]")
             return None
 
     def _classify_by_patterns(self, text: str) -> Optional[ClassificationResult]:
@@ -321,23 +328,37 @@ class DocumentClassifier:
         path = Path(file_path)
         extension = path.suffix.lower()
 
+        console.print(f"[cyan]→ Extracting text from: {path.name}[/cyan]")
+
+        # Check file size (skip files over max_file_size_mb)
+        try:
+            max_size = self.config['processing'].get('max_file_size_mb', 50) * 1024 * 1024
+            file_size = path.stat().st_size
+
+            if file_size > max_size:
+                console.print(f"[yellow]  ✗ File too large: {file_size / 1024 / 1024:.1f}MB[/yellow]")
+                return ""
+        except Exception:
+            pass  # If we can't check size, proceed anyway
+
         try:
             if extension == '.pdf':
-                return self._extract_pdf_text(file_path)
-            elif extension == '.docx':
-                return self._extract_docx_text(file_path)
-            elif extension == '.txt':
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    return f.read()
+                text = self._extract_pdf_text(file_path)
+                if text.strip():
+                    console.print(f"[green]  ✓ Extracted {len(text)} chars[/green]")
+                    console.print(f"[dim]  Preview: {text[:100]}...[/dim]")
+                else:
+                    console.print(f"[yellow]  ✗ No text extracted from PDF[/yellow]")
+                return text
             else:
-                console.print(f"[yellow]Unsupported file type: {extension}[/yellow]")
+                console.print(f"[yellow]  ✗ Unsupported extension: {extension}[/yellow]")
                 return ""
         except Exception as e:
-            console.print(f"[red]Text extraction failed for {path.name}: {e}[/red]")
+            console.print(f"[red]  ✗ Extraction error: {e}[/red]")
             return ""
 
     def _extract_pdf_text(self, file_path: str) -> str:
-        """Extract text from PDF file.
+        """Extract text from PDF file with Windows-compatible timeout.
 
         Args:
             file_path: Path to PDF file
@@ -346,39 +367,76 @@ class DocumentClassifier:
             Extracted text
         """
         text = ""
+        max_pages = 10  # Reduced to 10 for speed - most invoices are 1-2 pages
+        timeout_seconds = 5  # 5 second timeout for entire extraction
 
-        # Try pdfplumber first (better for complex PDFs)
+        # Use concurrent.futures for Windows-compatible timeout
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
+        def extract_with_pdfplumber():
+            """Extract text using pdfplumber."""
+            extracted = ""
+            try:
+                with pdfplumber.open(file_path) as pdf:
+                    total_pages = len(pdf.pages)
+                    pages_to_process = min(total_pages, max_pages)
+
+                    for page in pdf.pages[:pages_to_process]:
+                        try:
+                            page_text = page.extract_text(x_tolerance=3, y_tolerance=3)
+                            if page_text:
+                                extracted += page_text + "\n"
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+            return extracted
+
+        # Try pdfplumber with timeout
         try:
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text += page_text + "\n"
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(extract_with_pdfplumber)
+                text = future.result(timeout=timeout_seconds)
 
             if text.strip():
-                console.print(f"[green]Extracted text from PDF using pdfplumber[/green]")
                 return text
-        except Exception as e:
-            console.print(f"[yellow]pdfplumber failed: {e}[/yellow]")
+        except FuturesTimeoutError:
+            console.print(f"[yellow]  ⚠ PDF timeout ({timeout_seconds}s) - trying fallback[/yellow]")
+        except Exception:
+            pass
 
-        # Fallback to PyPDF2
+        # Fast fallback to PyPDF2 with same timeout
+        def extract_with_pypdf2():
+            """Extract text using PyPDF2."""
+            extracted = ""
+            try:
+                with open(file_path, 'rb') as f:
+                    pdf_reader = PyPDF2.PdfReader(f)
+                    total_pages = len(pdf_reader.pages)
+                    pages_to_process = min(total_pages, max_pages)
+
+                    for i in range(pages_to_process):
+                        try:
+                            page_text = pdf_reader.pages[i].extract_text()
+                            if page_text:
+                                extracted += page_text + "\n"
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+            return extracted
+
+        # Try PyPDF2 with timeout
         try:
-            with open(file_path, 'rb') as f:
-                pdf_reader = PyPDF2.PdfReader(f)
-                for page in pdf_reader.pages:
-                    text += page.extract_text() + "\n"
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(extract_with_pypdf2)
+                text = future.result(timeout=timeout_seconds)
+        except FuturesTimeoutError:
+            console.print(f"[yellow]  ⚠ PyPDF2 timeout - skipping PDF[/yellow]")
+        except Exception:
+            pass
 
-            if text.strip():
-                console.print(f"[green]Extracted text from PDF using PyPDF2[/green]")
-                return text
-        except Exception as e:
-            console.print(f"[yellow]PyPDF2 failed: {e}[/yellow]")
-
-        # Try OCR if enabled and text extraction failed
-        if self.config['processing'].get('enable_ocr', False):
-            console.print("[cyan]Attempting OCR...[/cyan]")
-            text = self._ocr_pdf(file_path)
-
+        # Return whatever we extracted (may be empty)
         return text
 
     def _extract_docx_text(self, file_path: str) -> str:
@@ -401,37 +459,8 @@ class DocumentClassifier:
             return ""
 
     def _ocr_pdf(self, file_path: str) -> str:
-        """Perform OCR on PDF file.
+        """OCR is disabled for this application.
 
-        Args:
-            file_path: Path to PDF file
-
-        Returns:
-            OCR extracted text
+        This method is not used but kept for potential future use.
         """
-        try:
-            import pytesseract
-            from pdf2image import convert_from_path
-            from PIL import Image
-
-            # Convert PDF to images
-            images = convert_from_path(file_path, dpi=300)
-
-            text = ""
-            languages = "+".join(self.config['processing'].get('ocr_languages', ['por']))
-
-            for i, image in enumerate(images):
-                console.print(f"[cyan]OCR processing page {i+1}/{len(images)}...[/cyan]")
-                page_text = pytesseract.image_to_string(image, lang=languages)
-                text += page_text + "\n"
-
-            if text.strip():
-                console.print(f"[green]OCR completed successfully[/green]")
-
-            return text
-        except ImportError:
-            console.print("[yellow]WARNING: OCR dependencies not installed (pytesseract, pdf2image)[/yellow]")
-            return ""
-        except Exception as e:
-            console.print(f"[red]OCR failed: {e}[/red]")
-            return ""
+        return ""
