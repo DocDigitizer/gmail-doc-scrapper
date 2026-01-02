@@ -279,13 +279,13 @@ pytest tests/test_document_classifier.py::test_classify_invoice -v
 ## CI/CD
 
 GitLab CI pipeline (.gitlab-ci.yml):
-- **Runs on**: merge_requests, main, master, develop
+- **Runs on**: merge_requests, main, develop (also supports master for compatibility)
 - **Stages**: test, code-quality, build, deploy (pages)
 - **Python version**: 3.11 (configurable via PYTHON_VERSION variable)
 - **Test stage**: Installs dependencies, downloads spaCy model, runs pytest with coverage
 - **Code quality stage**: Runs black --check and flake8 (allow_failure: true)
 - **Build stage**: Builds and pushes Docker image to GitLab registry
-- **Deploy stage**: Builds mkdocs documentation to GitLab Pages (main/master only)
+- **Deploy stage**: Builds mkdocs documentation to GitLab Pages (main branch)
 - **Artifacts**: Coverage reports (1 week retention), htmlcov/
 
 ## Common Development Tasks

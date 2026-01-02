@@ -137,7 +137,7 @@
    Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
    git remote add origin https://github.com/yourusername/gmail-doc-scrapper.git
-   git push -u origin master
+   git push -u origin main
    ```
 
 6. **Create first release**

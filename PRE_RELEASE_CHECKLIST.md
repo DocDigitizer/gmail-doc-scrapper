@@ -198,7 +198,7 @@ Before making public:
 - [ ] Enable code scanning (optional)
 
 ### Branches
-- [ ] Default branch: `main` or `master`
+- [ ] Default branch: `main`
 - [ ] Branch protection rules (optional)
 
 ## ✅ First Release
