@@ -1,4 +1,12 @@
-# Gmail Document Scraper Configuration
+# Gmail Document Scraper Configuration (v2.0)
+#
+# v2.0 MAJOR CHANGES:
+# - Classification now based on EMAIL SUBJECT and BODY (not attachment content)
+# - All emails are searched (not just those with attachments)
+# - When email matches classification rules and has attachments, all attachments are saved
+#
+# FOCUS: This tool is optimized for extracting INVOICES and RECEIPTS
+# Primary keywords: invoice, receipt, fatura, factura, recibo
 
 # IMAP Settings
 imap:

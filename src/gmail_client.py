@@ -166,12 +166,35 @@ class GmailClient:
             return False
 
         try:
-            status, messages = self.connection.select(folder)
-            if status == "OK":
-                num_messages = int(messages[0])
-                self.current_folder = folder  # Save current folder for reconnect
-                console.print(f"[cyan]Selected folder '{folder}' ({num_messages} messages)[/cyan]")
-                return True
+            # Remove any existing quotes from folder name
+            folder_clean = folder.strip('"')
+
+            console.print(f"[dim]Attempting to select: '{folder_clean}'[/dim]")
+
+            # imaplib handles quoting internally for most cases
+            # Let's try direct selection first
+            try:
+                status, messages = self.connection.select(folder_clean)
+                if status == "OK":
+                    num_messages = int(messages[0])
+                    self.current_folder = folder_clean  # Save current folder for reconnect
+                    console.print(f"[cyan]Selected folder '{folder_clean}' ({num_messages} messages)[/cyan]")
+                    return True
+            except Exception as e1:
+                console.print(f"[dim yellow]First attempt failed: {e1}[/dim yellow]")
+
+                # If first attempt failed, try with explicit quoting
+                console.print(f"[dim yellow]Retrying with quoted folder name...[/dim yellow]")
+                try:
+                    status, messages = self.connection.select(f'"{folder_clean}"')
+                    if status == "OK":
+                        num_messages = int(messages[0])
+                        self.current_folder = folder_clean
+                        console.print(f"[cyan]Selected folder '{folder_clean}' ({num_messages} messages)[/cyan]")
+                        return True
+                except Exception as e2:
+                    console.print(f"[dim yellow]Second attempt failed: {e2}[/dim yellow]")
+
             return False
         except Exception as e:
             console.print(f"[red]Failed to select folder '{folder}': {e}[/red]")
@@ -388,6 +411,96 @@ class GmailClient:
         except Exception as e:
             console.print(f"[yellow]Failed to list folders: {e}[/yellow]")
             return []
+
+    def find_all_mail_folder(self) -> Optional[str]:
+        """Find the 'All Mail' folder automatically using IMAP attributes.
+
+        This function uses two strategies:
+        1. Searches for the folder with the special \\All attribute (IMAP standard)
+        2. Falls back to trying common localized names
+
+        Returns:
+            Folder name if found, None otherwise
+        """
+        if not self.connection:
+            console.print("[red]Not connected to Gmail[/red]")
+            return None
+
+        console.print("[cyan]Auto-detecting 'All Mail' folder...[/cyan]")
+
+        # Strategy 1: Use IMAP LIST to find folder with \All attribute
+        try:
+            typ, data = self.connection.list()
+            if typ == "OK" and data:
+                for raw in data:
+                    if not raw:
+                        continue
+
+                    # Decode the response line
+                    line = raw.decode("utf-8", errors="replace")
+
+                    # Debug: show the line if it contains \All
+                    if r"\All" in line:
+                        console.print(f"[dim]LIST response: {line}[/dim]")
+
+                    # Look for the special \All attribute
+                    if r"\All" in line:
+                        # Extract mailbox name (usually the last token, often quoted)
+                        # Format: (\HasNoChildren \All) "/" "[Gmail]/All Mail"
+                        import re
+
+                        # Try to extract the mailbox name from the last quoted section
+                        # Pattern: find the last occurrence of quoted text
+                        match = re.search(r'"([^"]+)"\s*$', line)
+                        if match:
+                            mailbox = match.group(1)
+                            console.print(f"[green]✓ Found via \\All attribute: '{mailbox}'[/green]")
+                            return mailbox
+
+                        # Alternative parsing: split by separator and clean quotes
+                        parts = line.split(' "/" ')
+                        if len(parts) >= 2:
+                            mailbox = parts[-1].strip()
+                            # Remove quotes if present
+                            if mailbox.startswith('"') and mailbox.endswith('"'):
+                                mailbox = mailbox[1:-1]
+                            console.print(f"[green]✓ Found via \\All attribute: '{mailbox}'[/green]")
+                            return mailbox
+        except Exception as e:
+            console.print(f"[yellow]Could not detect via \\All attribute: {e}[/yellow]")
+
+        # Strategy 2: Fallback to common localized names
+        console.print("[cyan]Trying common folder names...[/cyan]")
+        candidates = [
+            '[Gmail]/All Mail',          # English
+            '[Google Mail]/All Mail',    # English (alternative)
+            '[Gmail]/Todo o correio',    # Portuguese
+            '[Google Mail]/Todo o correio',  # Portuguese (alternative)
+            '[Gmail]/Todos',             # Portuguese (short)
+            '[Gmail]/Tudo',              # Portuguese (alternative)
+            '[Gmail]/Alle Nachrichten',  # German
+            '[Gmail]/Tous les messages', # French
+            '[Gmail]/Tutti i messaggi',  # Italian
+            '[Gmail]/Todos los mensajes', # Spanish
+        ]
+
+        for candidate in candidates:
+            try:
+                # Try to select in readonly mode (without quotes, let select_folder handle it)
+                typ, _ = self.connection.select(candidate, readonly=True)
+                if typ == "OK":
+                    console.print(f"[green]✓ Found by name: '{candidate}'[/green]")
+                    # Unselect to avoid side effects
+                    try:
+                        self.connection.close()
+                    except:
+                        pass
+                    return candidate
+            except Exception:
+                continue
+
+        console.print("[red]✗ Could not find 'All Mail' folder[/red]")
+        return None
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""

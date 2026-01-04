@@ -1,42 +1,33 @@
-# Financial Document Classification Rules
-# ONLY INVOICES - Optimized for invoice detection only
+# Document Classification Rules (v2.0)
+# FOCUSED: Invoices and Receipts Only - EXACT MATCH
+#
+# v2.0 BEHAVIOR:
+# - Rules are applied to EMAIL SUBJECT and BODY (not attachment content)
+# - EXACT MATCH ONLY: Must contain the exact keywords (case-insensitive)
+# - No fuzzy matching or approximations
+# - If email matches and has attachments, all attachments are saved
+#
+# EXACT KEYWORDS REQUIRED:
+# - Invoices: invoice, fatura, factura
+# - Receipts: receipt, recibo
 
 invoices:
   display_name: "Invoices"
   keywords:
-    - fatura
-    - invoice
-    - bill
-    - nota fiscal
-    - NIF
-    - NIPC
-    - total a pagar
-    - total to pay
-    - valor total
-    - total amount
-    - total due
-    - amount due
-    - IVA
-    - VAT
-    - subtotal
-    - montante
-    - factura
-    - facture
-  entities:
-    - MONEY
-    - ORG
-    - DATE
-  patterns:
-    - "Fatura\\s+N[ºo.:]?\\s*\\d+"
-    - "Invoice\\s+#?\\d+"
-    - "Factura\\s+N[ºo.:]?\\s*\\d+"
-    - "NIF\\s*:?\\s*\\d{9}"
-    - "NIPC\\s*:?\\s*\\d{9}"
-    - "Total\\s*:?\\s*[€$£]?\\s*\\d+[.,]\\d{2}"
-    - "IVA\\s*[(:)]?\\s*\\d+%"
-    - "VAT\\s*[(:)]?\\s*\\d+%"
-    - "Subtotal\\s*:?\\s*[€$£]?\\s*\\d+[.,]\\d{2}"
-    - "Tax\\s+ID\\s*:?\\s*\\d{9}"
-  file_extensions:
-    - .pdf
-  confidence_boost: 0.15
+    # EXACT matches required (case-insensitive, whole word)
+    - invoice    # English
+    - fatura     # Portuguese
+    - factura    # Portuguese/Spanish alternative
+  patterns: []   # No patterns - exact keyword match only
+  entities: []   # No NLP - exact keyword match only
+  confidence_boost: 0.0
+
+receipts:
+  display_name: "Receipts"
+  keywords:
+    # EXACT matches required (case-insensitive, whole word)
+    - receipt    # English
+    - recibo     # Portuguese
+  patterns: []   # No patterns - exact keyword match only
+  entities: []   # No NLP - exact keyword match only
+  confidence_boost: 0.0

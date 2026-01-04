@@ -4,9 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Gmail Document Scraper is an AI-powered Python application that extracts and classifies documents (invoices, contracts, receipts, tax documents) from Gmail accounts. It uses NLP (spaCy), pattern matching, and keyword analysis to intelligently classify document types with confidence scoring.
+Gmail Document Scraper is an AI-powered Python application that extracts and classifies **invoices and receipts** from Gmail accounts. **v2.0 uses email subject and body classification** - it analyzes email content (not attachment content) and saves all attachments when a match is found. Uses NLP (spaCy), pattern matching, and keyword analysis with confidence scoring.
+
+**Focus:** Optimized for finding invoices and receipts using **EXACT keyword matching**: **invoice**, **receipt**, **fatura**, **factura**, **recibo**.
+
+**Search:** Auto-detects and searches **All Mail** folder (works with any Gmail localization: English, Portuguese, Spanish, German, French, Italian).
 
 **Requirements:** Python 3.9+
+
+**Version:** 2.0.0 (Major Release)
+
+### v2.0 Major Changes
+
+**Breaking architectural change from v1.0:**
+- **v1.0:** Classified each attachment by extracting and analyzing attachment content (PDF text, DOCX, etc.)
+- **v2.0:** Classifies based on email subject + body text, then saves ALL attachments if email matches
+
+**Benefits of v2.0:**
+- Faster processing (no PDF text extraction per attachment)
+- Better accuracy for emails with clear subjects (e.g., "Invoice #123 - January 2024")
+- Handles cases where attachments are images/scans without text
+- Processes all emails (not just those with attachments)
 
 ## Development Commands
 
@@ -125,25 +143,28 @@ The application follows a modular pipeline architecture:
    - Connects to Gmail via IMAP SSL (port 993)
    - Implements connection keepalive (NOOP every 5 minutes) to prevent 30-minute timeout
    - Auto-reconnection with folder state restoration
-   - Searches emails by date range and fetches individual messages
+   - **v2.0:** Searches ALL emails (not filtered by has_attachments)
 
 2. **EmailParser** (`src/email_parser.py`) - Email processing
+   - Extracts email headers (subject, from, date)
+   - **v2.0:** Extracts email body text (plain text or HTML stripped)
    - Extracts attachments from email messages
-   - Decodes email headers (subject, from, date)
    - Filters attachments by supported extensions (.pdf, .docx, .xlsx, .png, .jpg)
 
 3. **DocumentClassifier** (`src/document_classifier.py`) - Intelligent classification
+   - **v2.0 PRIMARY METHOD:** `classify_email(subject, body)` - Classifies based on email content
    - Uses 3-tier hybrid approach (pattern matching, NLP entities, keywords)
-   - Extracts text from PDFs (PyPDF2, pdfplumber) and DOCX files
    - spaCy NLP for named entity recognition (MONEY, ORG, DATE, etc.)
    - Confidence scoring with configurable threshold (default: 0.7)
-   - Returns best classification result across all methods
+   - Subject line is weighted 3x in classification (appears 3 times in text)
+   - **DEPRECATED:** `classify_document(file_path)` - kept for backward compatibility
 
 4. **FileManager** (`src/file_manager.py`) - File organization
    - SHA256 hash-based duplicate detection
    - Organizes files by document type and date (configurable)
    - Maintains metadata.json with file records
    - Handles filename collisions
+   - **v2.0:** Saves ALL attachments from classified emails (not individual classification)
 
 5. **ReportGenerator** (`src/report_generator.py`) - Reporting
    - Console reports with Rich formatting
@@ -155,32 +176,53 @@ The application follows a modular pipeline architecture:
    - Validates configuration schema
    - Provides centralized config access
 
-### Data Flow
+### Data Flow (v2.0)
 
 ```
 Gmail IMAP → EmailParser → DocumentClassifier → FileManager → ReportGenerator
      ↓            ↓               ↓                   ↓              ↓
-  Fetch      Extract         Classify            Save           Report
-  emails     attachments     document type       with hash      statistics
+  Fetch ALL   Extract       Classify EMAIL     Save ALL        Report
+  emails      subject+body  (subject + body)   attachments     statistics
+     ↓            ↓               ↓             if match            ↓
+  (no filter  (body text)   Pattern/NLP/      (with hash      Emails processed
+  by attach)               Keywords match     dedup)          Documents saved
 ```
 
-### Classification Algorithm
+**v2.0 Flow Details:**
+1. Fetch emails (ALL, not just with attachments)
+2. Parse email → extract subject, body, attachments list
+3. Classify email text (subject appears 3x for weight)
+4. If classification match found AND attachments exist → save ALL attachments
+5. Generate report with statistics
 
-Document classification uses a 3-tier hybrid system (see INVOICE_CLASSIFICATION_ALGORITHM.md for details):
+### Classification Algorithm (v2.0) - EXACT MATCH ONLY
 
-1. **Pattern Matching** (highest priority) - Regex patterns for document-specific formats
-   - Example: "Fatura\\s+N[ºo.:]?\\s*\\d+" matches "Fatura Nº 2024/123"
-   - Confidence: `(matches/total) × 0.8 + 0.2 + boost`
+**v2.0 classifies EMAIL content** (subject + body) using **EXACT keyword matching only**.
 
-2. **NLP Entity Recognition** (spaCy) - Extracts named entities
-   - Example: MONEY (€150.00), ORG (company names), DATE (2024-12-31)
-   - Confidence: `(entities_found/required) × 0.7 + 0.2 + boost`
+**EXACT MATCH REQUIREMENTS:**
+- Must contain **exact word** (whole word, case-insensitive)
+- Uses word boundaries (\\b) to ensure complete word match
+- No fuzzy matching, no approximations, no patterns
+- Confidence: 1.0 (100%) when exact match found
 
-3. **Keyword Matching** (fallback) - Simple keyword counting
-   - Example: "invoice", "fatura", "NIF", "total"
-   - Confidence: `(keywords_found/total) × 0.6 + 0.15` (max 0.85)
+**Required Keywords:**
+- **Invoices:** invoice, fatura, factura
+- **Receipts:** receipt, recibo
 
-Best result (highest confidence) wins. Must exceed threshold (default 0.7) to classify.
+**Examples that MATCH:**
+- ✅ "Invoice #123" → contains "invoice"
+- ✅ "Your FATURA is ready" → contains "fatura"
+- ✅ "Receipt attached" → contains "receipt"
+- ✅ "Recibo de pagamento" → contains "recibo"
+
+**Examples that DON'T match:**
+- ❌ "invoicing" → not exact word "invoice"
+- ❌ "Please pay bill" → "bill" not in keyword list
+- ❌ "Payment confirmation" → no exact keyword
+
+**Subject Weight:** Subject line appears 3x in combined text to give it more importance.
+
+**NLP & Patterns:** Disabled - only exact keyword matching is used.
 
 ### Connection Keepalive System
 
@@ -203,9 +245,14 @@ See CONNECTION_KEEPALIVE.md for implementation details.
 - Duplicate detection method (hash/filename/both)
 
 **config/rules.yaml** - Document classification rules
-- Document types: invoices, contracts, receipts, tax_documents
-- Each type has: keywords, patterns (regex), entities (NLP), confidence_boost
-- Easily extensible by adding new document types
+- Document types: **invoices** and **receipts** only
+- **EXACT keyword matching ONLY** - no patterns, no NLP, no approximations
+- **Keywords:**
+  - Invoices: invoice, fatura, factura
+  - Receipts: receipt, recibo
+- patterns: [] (disabled)
+- entities: [] (disabled)
+- confidence_boost: 0.0 (not used - always 1.0 for exact match)
 
 **.env** - Credentials (not in repo)
 ```
@@ -221,17 +268,27 @@ GMAIL_APP_PASSWORD=your-app-password
 - IMAP must be enabled in Gmail settings
 - Generate at: https://myaccount.google.com/apppasswords
 
-### Text Extraction Priority
-For PDFs, the classifier tries multiple methods in order:
-1. pdfplumber (best for complex layouts)
-2. PyPDF2 (fallback for simple PDFs)
-3. OCR with Tesseract (for scanned documents, if enabled)
+### Email Body Extraction (v2.0)
+Email body text is extracted for classification:
+1. Plain text preferred (text/plain)
+2. HTML stripped to text if no plain text available
+3. Both subject and body combined for classification (subject weighted 3x)
 
-### Folder Search Behavior
-- Default: Searches all Gmail folders automatically (folder="ALL")
-- main.py line 90: `folder = "ALL"` sets auto-search mode
-- GmailClient.list_folders() returns all available folders
-- Processes folders sequentially, combining results
+### Folder Search Behavior (v2.0) - Auto-Detection
+- **Auto-detects All Mail folder** using IMAP attributes and localized names
+- GmailClient.find_all_mail_folder() (gmail_client.py:392)
+- **Two-strategy approach:**
+  1. **Primary:** Searches for folder with `\All` IMAP attribute (RFC 6154 standard)
+  2. **Fallback:** Tries common localized names:
+     - English: `[Gmail]/All Mail`, `[Google Mail]/All Mail`
+     - Portuguese: `[Gmail]/Todo o correio`, `[Gmail]/Todos`, `[Gmail]/Tudo`
+     - Spanish: `[Gmail]/Todos los mensajes`
+     - German: `[Gmail]/Alle Nachrichten`
+     - French: `[Gmail]/Tous les messages`
+     - Italian: `[Gmail]/Tutti i messaggi`
+- **Benefits:** Works automatically regardless of Gmail language/locale
+- Corresponds to https://mail.google.com/mail/u/0/#all in Gmail web interface
+- Ensures all emails are processed exactly once (no duplicates)
 
 ### Duplicate Detection
 - SHA256 hash calculated from file content (not filename)
@@ -411,7 +468,7 @@ gmail-doc-scrapper/
 
 ## Build Configuration (pyproject.toml)
 
-- **Package name**: gmail-doc-scraper v1.0.0
+- **Package name**: gmail-doc-scraper v2.0.0
 - **Python requirement**: >=3.9
 - **Build system**: setuptools + wheel
 - **CLI entry point**: `gmail-scraper` command (via project.scripts)
@@ -422,13 +479,28 @@ gmail-doc-scrapper/
 
 ## Notes for Future Development
 
+### v2.0 Architecture Notes
+- **Classification target:** Email subject + body (NOT attachment content)
+- **Subject weighting:** Subject appears 3x in classification text for higher priority
+- **Attachment handling:** ALL attachments saved when email matches (no per-attachment classification)
+- **Email search:** Fetches ALL emails (not filtered by has_attachments)
+- **Speed improvement:** No PDF text extraction during processing (faster than v1.0)
+
+### General Notes
 - spaCy model is optional but highly recommended (better classification accuracy)
-- OCR requires Tesseract system package (not just Python package)
+- OCR is NOT used in v2.0 (classification based on email text, not attachment content)
 - Connection keepalive critical for processing >100 emails (prevents timeout)
 - Duplicate detection relies on file content hash, not filename
 - Classification confidence scores are transparent and logged for debugging
 - All configuration is YAML-based (no hardcoded values in code)
 - Reports are saved to reports/ directory with timestamp
 - Resume functionality stores state in reports/.last_run.json and reports/.checkpoint.json
-- Folder search default is "ALL" (main.py line 90) - searches all Gmail folders automatically
+- Folder search default is "ALL" (main.py line 259) - searches all Gmail folders automatically
 - Windows compatibility: Uses Path objects, has setup.ps1, handles newlines correctly
+
+### Migration from v1.0 to v2.0
+If upgrading from v1.0:
+1. Update rules.yaml - ensure patterns/keywords match email subjects/bodies (not document content)
+2. Test with --dry-run first to validate classification accuracy
+3. Consider lowering confidence_threshold in config.yaml (email subjects may have fewer matches than full document text)
+4. Clear existing output/ directory before first v2.0 run to avoid confusion

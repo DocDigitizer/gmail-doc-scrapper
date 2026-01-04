@@ -255,9 +255,9 @@ def interactive_mode(config_dir):
             "[cyan]Enter document type IDs (comma-separated, e.g., invoices,contracts)[/cyan]"
         )
 
-    # Automatically search all folders
-    folder = "ALL"
-    console.print("\n[cyan]📁 Searching in all Gmail folders automatically[/cyan]")
+    # Auto-detect All Mail folder
+    folder = None  # Will be auto-detected
+    console.print("\n[cyan]📁 Will auto-detect 'All Mail' folder (contains all emails)[/cyan]")
 
     # Output directory
     console.print("\n[cyan]Output Configuration[/cyan]")
@@ -277,7 +277,7 @@ def interactive_mode(config_dir):
     console.print(f"  Start Date: [green]{start_date.strftime('%Y-%m-%d')}[/green]")
     console.print(f"  End Date: [green]{end_date.strftime('%Y-%m-%d') if end_date else 'Not specified'}[/green]")
     console.print(f"  Document Types: [green]{document_types if document_types else 'All types'}[/green]")
-    console.print(f"  Folders: [green]ALL (automatic)[/green]")
+    console.print(f"  Folder: [green]All Mail (auto-detect)[/green]")
     console.print(f"  Output Directory: [green]{output_dir if output_dir else 'Default (./output)'}[/green]")
     console.print(f"  Dry Run: [green]{dry_run}[/green]")
     console.print()
@@ -316,8 +316,8 @@ def interactive_mode(config_dir):
 @click.option(
     '--folder',
     type=str,
-    default='INBOX',
-    help='Gmail folder(s) to search. Use "ALL" for all folders, or comma-separated list (default: INBOX)'
+    default=None,
+    help='Gmail folder to search (default: auto-detect All Mail folder)'
 )
 @click.option(
     '--config-dir',
@@ -361,7 +361,7 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
         # Dry run to test configuration
         python main.py --start-date 2024-12-01 --dry-run
     """
-    console.print("[bold cyan]Gmail Document Scraper v1.0[/bold cyan]\n")
+    console.print("[bold cyan]Gmail Document Scraper v2.0[/bold cyan]\n")
 
     # Handle resume mode
     if resume:
@@ -507,61 +507,29 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
 
         console.print()
 
-        # Handle folder selection and email search
-        if folder.upper() == "ALL":
-            # Search all folders dynamically
-            console.print("[cyan]Discovering available folders...[/cyan]")
-            all_folders = gmail_client.list_folders()
+        # Auto-detect and select All Mail folder
+        all_mail_folder = gmail_client.find_all_mail_folder()
+        if not all_mail_folder:
+            console.print("[red]❌ Could not find 'All Mail' folder in your Gmail account.[/red]")
+            console.print("[yellow]This might be due to localization or Gmail configuration.[/yellow]")
+            gmail_client.disconnect()
+            sys.exit(1)
 
-            if all_folders:
-                # Exclude spam, trash, and bin folders
-                excluded_patterns = ['[Gmail]/Spam', '[Gmail]/Trash', '[Gmail]/Bin']
-                folders_to_search = [f for f in all_folders if f not in excluded_patterns]
-                console.print(f"[green]Found {len(folders_to_search)} folders to search (excluding spam/trash)[/green]")
-            else:
-                # Fallback to default folders
-                console.print("[yellow]Could not list folders, using default folders[/yellow]")
-                folders_to_search = ['INBOX', '[Gmail]/Sent Mail', '[Gmail]/All Mail']
-                console.print(f"[cyan]Using default folders: {', '.join(folders_to_search)}[/cyan]")
+        console.print(f"[cyan]Selecting folder: {all_mail_folder}[/cyan]")
+        if not gmail_client.select_folder(all_mail_folder):
+            console.print(f"[red]Failed to select folder '{all_mail_folder}'. Exiting.[/red]")
+            gmail_client.disconnect()
+            sys.exit(1)
 
-            # Search emails across all folders
-            email_ids = []
-            email_ids_set = set()  # For deduplication
+        console.print(f"[green]✓ Connected to '{all_mail_folder}'[/green]")
+        console.print()
 
-            for folder_name in folders_to_search:
-                try:
-                    if gmail_client.select_folder(folder_name):
-                        folder_email_ids = gmail_client.search_emails(
-                            start_date=start_date,
-                            end_date=end_date,
-                            has_attachments=True
-                        )
-
-                        # Deduplicate email IDs
-                        new_ids = [eid for eid in folder_email_ids if eid.decode() not in email_ids_set]
-                        email_ids.extend(new_ids)
-                        email_ids_set.update(eid.decode() for eid in new_ids)
-
-                        console.print(f"  [dim]'{folder_name}': {len(folder_email_ids)} emails ({len(new_ids)} unique)[/dim]")
-                except Exception as e:
-                    console.print(f"[yellow]Skipping folder '{folder_name}': {e}[/yellow]")
-
-            console.print(f"[green]Total unique emails found across all folders: {len(email_ids)}[/green]")
-        else:
-            # Select single folder
-            if not gmail_client.select_folder(folder):
-                console.print(f"[red]Failed to select folder '{folder}'. Exiting.[/red]")
-                gmail_client.disconnect()
-                sys.exit(1)
-
-            console.print()
-
-            # Search emails
-            email_ids = gmail_client.search_emails(
-                start_date=start_date,
-                end_date=end_date,
-                has_attachments=True
-            )
+        # Search emails in All Mail
+        email_ids = gmail_client.search_emails(
+            start_date=start_date,
+            end_date=end_date,
+            has_attachments=False
+        )
 
         if not email_ids:
             console.print("[yellow]No emails found matching the specified criteria[/yellow]")
@@ -699,8 +667,37 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
                     # Parse email
                     email_data = email_parser.parse_email(msg)
 
+                    # NEW LOGIC: Classify based on email subject + body
+                    console.print(f"\n[cyan]┌─ Processing email: {email_data['subject'][:60]}...[/cyan]")
+                    console.print(f"[cyan]│  From: {email_data['from']}[/cyan]")
+                    console.print(f"[cyan]│  Date: {email_data['date']}[/cyan]")
+
+                    # Classify email content
+                    result = classifier.classify_email(
+                        subject=email_data['subject'],
+                        body=email_data['body']
+                    )
+
+                    if not result:
+                        console.print(f"[yellow]└─ Email not classified (no match)[/yellow]\n")
+                        # Mark as processed and continue
+                        processed_ids.add(email_id.decode())
+                        progress.advance(task)
+                        continue
+
+                    console.print(f"[green]└─ Email classified as: {result.display_name} ({result.confidence:.0%})[/green]\n")
+
+                    # Filter by document type if specified
+                    if doc_types_filter and result.document_type not in doc_types_filter:
+                        processed_ids.add(email_id.decode())
+                        progress.advance(task)
+                        continue
+
+                    report.record_classified(result.document_type)
+
+                    # Check if email has attachments
                     if not email_data['attachments']:
-                        # Mark as processed even without attachments
+                        console.print(f"[yellow]  ⚠ Email classified but no attachments found[/yellow]\n")
                         processed_ids.add(email_id.decode())
                         progress.advance(task)
                         continue
@@ -713,37 +710,12 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
                         config.get('processing.max_file_size_mb')
                     )
 
-                    # Process each attachment
+                    console.print(f"[cyan]  → Saving {len(attachments)} attachment(s) to '{result.document_type}' folder...[/cyan]")
+
+                    # Save ALL attachments to the classified document type folder
                     for attachment in attachments:
                         try:
-                            console.print(f"\n[cyan]┌─ Processing attachment: {attachment.filename}[/cyan]")
-                            console.print(f"[cyan]│  Size: {attachment.size / 1024:.1f}KB, Type: {attachment.get_extension()}[/cyan]")
-
-                            # Extract text from attachment
-                            text_content = extract_text_from_bytes(
-                                classifier,
-                                attachment.content,
-                                attachment.get_extension()
-                            )
-
-                            # Classify document
-                            result = classifier.classify_document(
-                                file_path=None,
-                                text_content=text_content
-                            )
-
-                            if not result:
-                                console.print(f"[yellow]└─ Classification failed for {attachment.filename}[/yellow]\n")
-                                report.record_classification_failure()
-                                continue
-                            else:
-                                console.print(f"[green]└─ Success! Classified as: {result.display_name}[/green]\n")
-
-                            # Filter by document type if specified
-                            if doc_types_filter and result.document_type not in doc_types_filter:
-                                continue
-
-                            report.record_classified(result.document_type)
+                            console.print(f"[cyan]    • {attachment.filename} ({attachment.size / 1024:.1f}KB)[/cyan]")
 
                             # Save file (unless dry run)
                             if not dry_run:
@@ -763,18 +735,22 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
 
                                 if output_path:
                                     report.record_saved(result.document_type)
+                                    console.print(f"[green]      ✓ Saved: {output_path}[/green]")
                                 else:
                                     report.record_duplicate()
+                                    console.print(f"[yellow]      ⚠ Duplicate (skipped)[/yellow]")
                             else:
                                 console.print(
-                                    f"[yellow]DRY RUN: Would save {attachment.filename} "
-                                    f"as {result.document_type}[/yellow]"
+                                    f"[yellow]      DRY RUN: Would save {attachment.filename} "
+                                    f"to {result.document_type}[/yellow]"
                                 )
 
                         except Exception as e:
-                            error_msg = f"Error processing attachment {attachment.filename}: {e}"
+                            error_msg = f"Error saving attachment {attachment.filename}: {e}"
                             report.record_error(error_msg)
-                            console.print(f"[red]{error_msg}[/red]")
+                            console.print(f"[red]      ✗ {error_msg}[/red]")
+
+                    console.print()  # Add spacing after processing email
 
                     # Mark email as processed
                     processed_ids.add(email_id.decode())
@@ -842,33 +818,6 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
         import traceback
         traceback.print_exc()
         sys.exit(1)
-
-
-def extract_text_from_bytes(classifier, content: bytes, extension: str) -> str:
-    """Helper to extract text from attachment bytes.
-
-    Args:
-        classifier: DocumentClassifier instance
-        content: File content as bytes
-        extension: File extension
-
-    Returns:
-        Extracted text content
-    """
-    # Save to temporary file
-    with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
-
-    try:
-        text = classifier.extract_text(tmp_path)
-        return text
-    finally:
-        # Clean up
-        try:
-            os.unlink(tmp_path)
-        except:
-            pass
 
 
 if __name__ == '__main__':

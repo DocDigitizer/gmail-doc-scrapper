@@ -90,8 +90,40 @@ class DocumentClassifier:
             'um', 'uma', 'os', 'as', 'dos', 'das', 'no', 'na', 'ao', 'à'
         ]
 
+    def classify_email(self, subject: str, body: str) -> Optional[ClassificationResult]:
+        """Classify an email based on subject and body text using EXACT keyword matching.
+
+        Args:
+            subject: Email subject line
+            body: Email body text
+
+        Returns:
+            ClassificationResult or None if classification failed
+        """
+        # Combine subject and body (subject has more weight)
+        # Subject appears 3x to give it more importance in classification
+        email_text = f"{subject}\n{subject}\n{subject}\n{body}"
+
+        if not email_text.strip():
+            console.print(f"[yellow]  ✗ Empty email content[/yellow]")
+            return None
+
+        console.print(f"[cyan]→ Classifying email (EXACT match only)[/cyan]")
+        console.print(f"[dim]  Subject: {subject[:80]}{'...' if len(subject) > 80 else ''}[/dim]")
+
+        # EXACT keyword matching only (no patterns, no NLP)
+        keyword_result = self._classify_by_exact_keywords(email_text)
+
+        if keyword_result:
+            console.print(f"[green]  ✓ {keyword_result.display_name}: matched keyword '{keyword_result.matched_keywords[0]}'[/green]")
+            return keyword_result
+        else:
+            console.print(f"[yellow]  ✗ No exact keyword match found[/yellow]")
+            console.print(f"[dim]     Required: invoice, receipt, fatura, factura, recibo[/dim]")
+            return None
+
     def classify_document(self, file_path: str, text_content: Optional[str] = None) -> Optional[ClassificationResult]:
-        """Classify a document by analyzing its content.
+        """Classify a document by analyzing its content (DEPRECATED - kept for backward compatibility).
 
         Args:
             file_path: Path to the document file
@@ -268,8 +300,45 @@ class DocumentClassifier:
 
         return None
 
+    def _classify_by_exact_keywords(self, text: str) -> Optional[ClassificationResult]:
+        """Classify document using EXACT keyword matching (whole word, case-insensitive).
+
+        Args:
+            text: Document text content
+
+        Returns:
+            ClassificationResult or None
+        """
+        import re
+
+        # Check each document type for exact keyword matches
+        for doc_type, rules in self.rules.items():
+            keywords = rules.get('keywords', [])
+            if not keywords:
+                continue
+
+            # Check if ANY keyword matches exactly (whole word, case-insensitive)
+            for keyword in keywords:
+                # Create regex pattern for exact word match (word boundaries)
+                # \b ensures we match whole words only
+                pattern = r'\b' + re.escape(keyword) + r'\b'
+
+                if re.search(pattern, text, re.IGNORECASE):
+                    # Found exact match! Return immediately with confidence 1.0
+                    return ClassificationResult(
+                        document_type=doc_type,
+                        confidence=1.0,  # Exact match = 100% confidence
+                        display_name=rules['display_name'],
+                        matched_patterns=[],
+                        matched_keywords=[keyword],
+                        method='exact_keyword'
+                    )
+
+        # No exact match found
+        return None
+
     def _classify_by_keywords(self, text: str) -> Optional[ClassificationResult]:
-        """Classify document using keyword matching.
+        """Classify document using keyword matching (DEPRECATED - use _classify_by_exact_keywords).
 
         Args:
             text: Document text content
