@@ -814,7 +814,9 @@ def main(interactive, start_date, end_date, document_types, folder, config_dir, 
         console.print("\n[yellow]Operation cancelled by user[/yellow]")
         sys.exit(1)
     except Exception as e:
-        console.print(f"\n[red bold]Error: {e}[/red bold]")
+        # Print error without markup to avoid Rich interpreting brackets in error messages
+        from rich.markup import escape
+        console.print(f"\n[red bold]Error:[/red bold] {escape(str(e))}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
